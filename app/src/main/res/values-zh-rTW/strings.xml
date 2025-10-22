@@ -603,7 +603,7 @@
     <string name="name_display_entry2">僅顯示顯示名稱</string>
     <string name="name_display_entry3">僅顯示登入名稱</string>
     <string name="show_system_message_emotes">在系統訊息上顯示表情符號</string>
-    <string name="replying_to_message">重新播放至 %1$s\: %2$s</string>
+    <string name="replying_to_message">回覆至 %1$s\: %2$s</string>
     <string name="channel_stv_emote">頻道 7TV 表情符號</string>
     <string name="channel_bttv_emote">頻道 BTTV 表情符號</string>
     <string name="channel_ffz_emote">頻道 FFZ 表情符號</string>
