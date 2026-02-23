@@ -2,7 +2,6 @@ package com.github.andreyasadchy.xtra.ui.search.videos
 
 import android.content.Context
 import android.net.http.HttpEngine
-import android.net.http.UrlResponseInfo
 import android.os.Build
 import android.os.ext.SdkExtensions
 import androidx.lifecycle.ViewModel
@@ -11,12 +10,14 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import com.github.andreyasadchy.xtra.model.ui.Bookmark
+import com.github.andreyasadchy.xtra.model.ui.RecentSearch
 import com.github.andreyasadchy.xtra.model.ui.User
 import com.github.andreyasadchy.xtra.model.ui.Video
 import com.github.andreyasadchy.xtra.repository.BookmarksRepository
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
+import com.github.andreyasadchy.xtra.repository.RecentSearchRepository
 import com.github.andreyasadchy.xtra.repository.datasource.SearchVideosDataSource
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.HttpEngineUtils
@@ -46,6 +47,7 @@ import kotlin.coroutines.suspendCoroutine
 @HiltViewModel
 class VideoSearchViewModel @Inject constructor(
     @ApplicationContext applicationContext: Context,
+    private val recentSearchRepository: RecentSearchRepository,
     playerRepository: PlayerRepository,
     private val bookmarksRepository: BookmarksRepository,
     private val graphQLRepository: GraphQLRepository,
@@ -58,6 +60,7 @@ class VideoSearchViewModel @Inject constructor(
 
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query
+    val recentSearches = recentSearchRepository.loadRecentSearchFlow(RecentSearch.TYPE_VIDEO)
     val positions = playerRepository.loadVideoPositions()
     val bookmarks = bookmarksRepository.loadBookmarksFlow()
 
@@ -88,6 +91,23 @@ class VideoSearchViewModel @Inject constructor(
         }
     }
 
+    fun saveRecentSearch(query: String) {
+        if (query.isNotBlank()) {
+            viewModelScope.launch {
+                recentSearchRepository.getItem(query, RecentSearch.TYPE_VIDEO)?.let {
+                    recentSearchRepository.delete(it)
+                }
+                recentSearchRepository.save(RecentSearch(query, RecentSearch.TYPE_VIDEO, System.currentTimeMillis()))
+            }
+        }
+    }
+
+    fun deleteRecentSearch(item: RecentSearch) {
+        viewModelScope.launch {
+            recentSearchRepository.delete(item)
+        }
+    }
+
     fun saveBookmark(filesDir: String, video: Video, networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>) {
         viewModelScope.launch {
             val item = video.id?.let { bookmarksRepository.getBookmarkByVideoId(it) }
@@ -102,7 +122,7 @@ class VideoSearchViewModel @Inject constructor(
                             try {
                                 when {
                                     networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
-                                        val response = suspendCoroutine<Pair<UrlResponseInfo, ByteArray>> { continuation ->
+                                        val response = suspendCoroutine { continuation ->
                                             httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
@@ -122,7 +142,7 @@ class VideoSearchViewModel @Inject constructor(
                                                 }
                                             }
                                         } else {
-                                            val response = suspendCoroutine<Pair<org.chromium.net.UrlResponseInfo, ByteArray>> { continuation ->
+                                            val response = suspendCoroutine { continuation ->
                                                 cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
                                             }
                                             if (response.first.httpStatusCode in 200..299) {
@@ -159,7 +179,7 @@ class VideoSearchViewModel @Inject constructor(
                             try {
                                 when {
                                     networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
-                                        val response = suspendCoroutine<Pair<UrlResponseInfo, ByteArray>> { continuation ->
+                                        val response = suspendCoroutine { continuation ->
                                             httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
@@ -179,7 +199,7 @@ class VideoSearchViewModel @Inject constructor(
                                                 }
                                             }
                                         } else {
-                                            val response = suspendCoroutine<Pair<org.chromium.net.UrlResponseInfo, ByteArray>> { continuation ->
+                                            val response = suspendCoroutine { continuation ->
                                                 cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
                                             }
                                             if (response.first.httpStatusCode in 200..299) {

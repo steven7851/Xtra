@@ -53,7 +53,6 @@
     <string name="permission_denied">Permissões necessárias foram negadas</string>
     <string name="nothing_here">Nada aqui</string>
     <string name="watch_live">Assistir transmissão</string>
-    <string name="watch_rerun">Assistir rerun</string>
     <string name="open_player">Abrir reprodutor</string>
     <string name="error_stream">Erro ao carregar transmissão</string>
     <string name="dark">Escuro</string>
@@ -83,8 +82,6 @@
     <string name="source_vod_start">Início: %s</string>
     <string name="source_vod_end">Fim: %s</string>
     <string name="stream_ended">O transmissão acabou</string>
-    <string name="viewers_count">%s assistindo</string>
-    <string name="views">%s assistiram</string>
     <string name="download_pending">Em andamento</string>
     <string name="downloading_progress">Baixando: %d%%</string>
     <string name="pause">Pausar</string>
@@ -109,12 +106,9 @@
     <string name="playback_will_stop_hours_minutes">A reprodução vai parar em %1$s %2$s</string>
     <string name="timer_canceled">O temporizador foi cancelado.</string>
     <string name="trouble_logging_in">Está tendo problemas para fazer login?</string>
-    <string name="login_problem_solution">Você pode fazer login usando um navegador externo. Depois de pressionar "\Autorizar\", uma página com um erro deve aparecer. Copie a url, retorne aqui e clique no botão "\Digite url\". Cole a url e clique em "\Entrar\"</string>
     <string name="no_browser_found">Nenhum aplicativo de navegador encontrado</string>
     <string name="browser_workaround">O navegador do seu sistema não é mais suportado. Clique no botão abaixo para uma solução alternativa</string>
     <string name="error">Erro: %s</string>
-    <string name="to_enter_url">Digite url</string>
-    <string name="enter_url">Digite url</string>
     <string name="invalid_url">Url inválida</string>
     <string name="sort_and_order">Classificar por: %1$s. Ordenar por: %2$s</string>
     <string name="time_followed">Tempo seguido</string>
@@ -129,7 +123,6 @@
     <string name="never">Nunca</string>
     <string name="blue">Azul</string>
     <string name="rounduserimage">Fotos de perfil em círculo</string>
-    <string name="truncated_view_counts">Ver contas ilegíveis</string>
     <string name="broadcastersCount">Mostrar número de transmissões com jogos</string>
     <string name="startonfollowed">Iniciar na página seguindo</string>
     <string name="when_logged_in">Quando conectado</string>
@@ -150,7 +143,6 @@
     <string name="video_type_archive">Transmissão passada</string>
     <string name="video_type_highlight">Destaque</string>
     <string name="video_type_upload">Upload</string>
-    <string name="video_type_rerun">Retransmissão</string>
     <string name="all">Tudo</string>
     <string name="type">Tipo</string>
     <string name="room_emote">Emote</string>
@@ -180,7 +172,6 @@
     <string name="timestamps">Mostrar horários</string>
     <string name="timestamp_format">Formato de horários</string>
     <string name="created_at">Criado em %s</string>
-    <string name="followers">%s seguidores</string>
     <string name="user_partner">Parceiro</string>
     <string name="user_affiliate">Afiliado</string>
     <string name="user_staff">Staff</string>
@@ -396,7 +387,6 @@
     <string name="followed_games">Jogos seguidos</string>
     <string name="irc_msgid_highlighted_message">Mensagem destacada</string>
     <string name="irc_msgid_announcement">Anúncio</string>
-    <string name="debug_secondview">Usar aplicativo no modo PiP</string>
     <string name="add_bookmark">Adicionar ao marcardores</string>
     <string name="show_vod_time_left">Mostrar tempo marcado deixado em vods</string>
     <string name="vod_time_left">Auto excluído em %s</string>
@@ -625,10 +615,10 @@
     <string name="prediction_title">Previsão atual: %s</string>
     <string name="prediction_locked">Bloqueada</string>
     <string name="prediction_refunded">Reembolsado</string>
-    <string name="poll_choice">%1$d%% (%2$d): %3$s</string>
-    <string name="poll_choice_winner">🏆%1$d%% (%2$d): %3$s</string>
-    <string name="prediction_outcome">%1$d%% (%2$d💎, %3$d👥): %4$s</string>
-    <string name="prediction_outcome_winner">🏆%1$d%% (%2$d💎, %3$d👥): %4$s</string>
+    <string name="poll_choice">%1$d%% (%2$s): %3$s</string>
+    <string name="poll_choice_winner">🏆%1$d%% (%2$s): %3$s</string>
+    <string name="prediction_outcome">%1$d%% (%2$s💎, %3$s👥): %4$s</string>
+    <string name="prediction_outcome_winner">🏆%1$d%% (%2$s💎, %3$s👥): %4$s</string>
     <string name="api_token_settings">Configurações de token da API</string>
     <string name="download_settings">Configurações de download</string>
     <string name="update_settings">Configurações de atualização</string>
@@ -676,7 +666,6 @@
     <string name="use_background_audio">Play audio in the background</string>
     <string name="avoid_rounded_corners">Avoid rounded screen corners</string>
     <string name="api_web_gql_token">Web GQL token</string>
-    <string name="use_new_pubsub">Use new PubSub url</string>
     <string name="chat_size_modifier">Size modifier</string>
     <string name="chat_emote_size">Emote size</string>
     <string name="chat_badge_size">Badge size</string>
@@ -693,7 +682,6 @@
     <string name="download_language_model_message">Download language model for %s?</string>
     <string name="translate_from_selected">Translate from selected language</string>
     <string name="translate_all_messages">Translate all messages on this channel</string>
-    <string name="use_custom_websockets">Use custom WebSockets</string>
     <string name="show_more_websocket_info">Show more info about WebSockets</string>
     <string name="websocket_connected">%s: Connected</string>
     <string name="websocket_disconnected">%1$s: Disconnected - %2$s</string>
@@ -714,4 +702,31 @@
     <string name="save_filters">Save filters</string>
     <string name="delete_filter_message">Are you sure you want to delete this filter?</string>
     <string name="use_custom_playback_service">Use custom playback service</string>
+    <string name="move_player_freely">Move minimized player freely</string>
+    <string name="store_recent_searches">Store recent searches</string>
+    <string name="delete_recent_searches">Delete recent searches</string>
+    <string name="delete_recent_searches_message">Are you sure you want to delete all recent searches?</string>
+    <string name="deletion_date">Deletion date</string>
+    <string name="creation_date">Creation date</string>
+    <string name="saved_date">Saved date</string>
+    <string name="about">About</string>
+    <string name="team">Team: %s</string>
+    <string name="owner">Owner: %s</string>
+    <string name="use_background_audio_locked">Play audio in the background when locking the screen</string>
+    <string name="use_background_audio_pip_closed">Play audio in the background when closing PiP</string>
+    <string name="use_background_audio_pip_locked">Play audio in the background when locking the screen in PiP mode</string>
+    <string name="old_username">Old name: %s</string>
+    <string name="default_cellular_quality">Default player quality on cellular network</string>
+    <string name="player">Player</string>
+    <string name="compact_number_formatting">Compact number formatting</string>
+    <string name="less_rounded_corners">Less rounded</string>
+    <string name="reduced_padding">Reduced padding</string>
+    <string name="compact_text">Compact text</string>
+    <string name="next">Next</string>
+    <string name="tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the web page.\n• Press the \"Next\" button at the bottom.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".</string>
+    <string name="open_url">Open URL</string>
+    <string name="external_login_message">You can log in using an external browser.\n\nFollow these steps:\n• Press \"Open URL\" to open the login page.\n• Login to your account and press \"Authorize\".\n• A page with an error should appear. Copy the URL of that page, paste the URL into the box below and press \"OK\".</string>
+    <string name="loading">Loading...</string>
+    <string name="copy_code">Copy code</string>
+    <string name="external_tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the screen.\n• Press the \"Open URL\" button.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".\n• Return to Xtra and press \"Next\".</string>
 </resources>

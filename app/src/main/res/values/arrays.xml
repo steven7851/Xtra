@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string-array name="playerEntries">
+        <item>ExoPlayer</item>
+        <item>MediaPlayer</item>
+    </string-array>
+
     <string-array name="networkLibraryEntries">
         <item>HttpEngine</item>
         <item>Cronet</item>
@@ -121,6 +126,18 @@
         <item>1</item>
         <item>2</item>
         <item>3</item>
+    </string-array>
+
+    <string-array name="roundedCornerEntries">
+        <item>@string/enabled_setting</item>
+        <item>@string/less_rounded_corners</item>
+        <item>@string/disabled_setting</item>
+    </string-array>
+
+    <string-array name="roundedCornerValues">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
     </string-array>
 
     <string-array name="portraitColumnCount">

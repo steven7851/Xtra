@@ -15,14 +15,14 @@
  */
 package com.github.andreyasadchy.xtra.player.lowlatency;
 
-import static androidx.media3.common.util.Assertions.checkNotNull;
-import static androidx.media3.common.util.Assertions.checkState;
 import static androidx.media3.common.util.Util.castNonNull;
 import static androidx.media3.common.util.Util.msToUs;
 import static androidx.media3.common.util.Util.parseXsDateTime;
 import static androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist.Interstitial.CUE_TRIGGER_ONCE;
 import static androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist.Interstitial.CUE_TRIGGER_POST;
 import static androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist.Interstitial.CUE_TRIGGER_PRE;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 import android.net.Uri;
 import android.text.TextUtils;
@@ -36,7 +36,6 @@ import androidx.media3.common.Format;
 import androidx.media3.common.Metadata;
 import androidx.media3.common.MimeTypes;
 import androidx.media3.common.ParserException;
-import androidx.media3.common.util.Assertions;
 import androidx.media3.common.util.Log;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.common.util.UriUtil;
@@ -246,6 +245,8 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       Pattern.compile("LANGUAGE=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_NAME =
       Pattern.compile("NAME=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
+  private static final Pattern REGEX_IVS_NAME =
+      Pattern.compile("IVS-NAME=" + ATTR_QUOTED_STRING_VALUE_PATTERN); // xtra: quality names
   private static final Pattern REGEX_GROUP_ID =
       Pattern.compile("GROUP-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_CHARACTERISTICS =
@@ -293,6 +294,12 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       Pattern.compile("X-TIMELINE-OCCUPIES=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_TIMELINE_STYLE =
       Pattern.compile("X-TIMELINE-STYLE=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
+  private static final Pattern REGEX_SKIP_CONTROL_OFFSET =
+      Pattern.compile("X-SKIP-CONTROL-OFFSET=([\\d\\.]+)\\b");
+  private static final Pattern REGEX_SKIP_CONTROL_DURATION =
+      Pattern.compile("X-SKIP-CONTROL-DURATION=([\\d\\.]+)\\b");
+  private static final Pattern REGEX_SKIP_CONTROL_LABEL_ID =
+      Pattern.compile("X-SKIP-CONTROL-LABEL-ID=" + ATTR_QUOTED_STRING_VALUE_PATTERN);
   private static final Pattern REGEX_VARIABLE_REFERENCE =
       Pattern.compile("\\{\\$([a-zA-Z0-9\\-_]+)\\}");
   private static final Pattern REGEX_CLIENT_DEFINED_ATTRIBUTE_PREFIX =
@@ -526,6 +533,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
             parseOptionalStringAttr(line, REGEX_SUBTITLES, variableDefinitions);
         String closedCaptionsGroupId =
             parseOptionalStringAttr(line, REGEX_CLOSED_CAPTIONS, variableDefinitions);
+        String label = parseOptionalStringAttr(line, REGEX_IVS_NAME, variableDefinitions); // xtra: quality names
         Uri uri;
         if (isIFrameOnlyVariant) {
           uri =
@@ -563,11 +571,11 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                     }
                   }
                   if (!skip) {
-                    String name = obj.optString("NAME");
+                    String name = obj.optString("IVS_NAME");
                     int newPeakBitrate = obj.optInt("BANDWIDTH");
                     String newCodecsString = obj.optString("CODECS");
                     String newResolutionString = obj.optString("RESOLUTION");
-                    String newVideoGroupId = obj.optString("GROUP-ID");
+                    String id = obj.optString("STABLE-VARIANT-ID");
                     float newFrameRate = obj.optInt("FRAME-RATE");
                     int newWidth;
                     int newHeight;
@@ -584,10 +592,14 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                       newWidth = Format.NO_VALUE;
                       newHeight = Format.NO_VALUE;
                     }
-                    Uri newUri = Uri.parse(uri.toString().replace(videoGroupId + "/index-", newVideoGroupId + "/index-"));
+                    Uri newUri = Uri.parse(uri.toString().replace(
+                            label + "/index-",
+                            ((variants.isEmpty() && !id.equals("audio_only")) ? "chunked" : id) + "/index-"
+                    ));
                     Format format =
                             new Format.Builder()
                                     .setId(variants.size())
+                                    .setLabel(name)
                                     .setContainerMimeType(MimeTypes.APPLICATION_M3U8)
                                     .setCodecs(newCodecsString)
                                     .setAverageBitrate(-1)
@@ -599,7 +611,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                                     .build();
                     Variant variant =
                             new Variant(
-                                    newUri, format, newVideoGroupId, null, null, null);
+                                    newUri, format, null, null, null, null);
                     variants.add(variant);
                     @Nullable ArrayList<VariantInfo> variantInfosForUrl = urlToVariantInfos.get(newUri);
                     if (variantInfosForUrl == null) {
@@ -610,31 +622,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                             new VariantInfo(
                                     -1,
                                     newPeakBitrate,
-                                    newVideoGroupId,
+                                    null,
                                     null,
                                     null,
                                     null));
-                    Format.Builder formatBuilder =
-                            new Format.Builder()
-                                    .setId(newVideoGroupId + ":" + name)
-                                    .setLabel(name)
-                                    .setContainerMimeType(MimeTypes.APPLICATION_M3U8)
-                                    .setSelectionFlags(0)
-                                    .setRoleFlags(0)
-                                    .setLanguage(null);
-                    Metadata metadata =
-                            new Metadata(new HlsTrackMetadataEntry(newVideoGroupId, name, Collections.emptyList()));
-                    Format variantFormat = variant.format;
-                    @Nullable
-                    String newCodecs = Util.getCodecsOfType(variantFormat.codecs, C.TRACK_TYPE_VIDEO);
-                    formatBuilder
-                            .setCodecs(newCodecs)
-                            .setSampleMimeType(MimeTypes.getMediaMimeType(newCodecs))
-                            .setWidth(variantFormat.width)
-                            .setHeight(variantFormat.height)
-                            .setFrameRate(variantFormat.frameRate);
-                    formatBuilder.setMetadata(metadata);
-                    videos.add(new Rendition(newUri, formatBuilder.build(), newVideoGroupId, name));
                   }
                 }
               }
@@ -646,6 +637,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
         Format format =
             new Format.Builder()
                 .setId(variants.size())
+                .setLabel(label) // xtra: quality names
                 .setContainerMimeType(MimeTypes.APPLICATION_M3U8)
                 .setCodecs(codecs)
                 .setAverageBitrate(averageBitrate)
@@ -697,7 +689,7 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
     for (int i = 0; i < variants.size(); i++) {
       Variant variant = variants.get(i);
       if (urlsInDeduplicatedVariants.add(variant.url)) {
-        Assertions.checkState(variant.format.metadata == null);
+        checkState(variant.format.metadata == null);
         HlsTrackMetadataEntry hlsMetadataEntry =
             new HlsTrackMetadataEntry(
                 /* groupId= */ null,
@@ -1346,6 +1338,22 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
           }
         }
 
+        double skipControlOffsetSec =
+            parseOptionalDoubleAttr(line, REGEX_SKIP_CONTROL_OFFSET, -1.0d);
+        long skipControlOffsetUs = C.TIME_UNSET;
+        if (skipControlOffsetSec >= 0) {
+          skipControlOffsetUs = (long) (skipControlOffsetSec * C.MICROS_PER_SECOND);
+        }
+        double skipControlDurationSec =
+            parseOptionalDoubleAttr(line, REGEX_SKIP_CONTROL_DURATION, -1.0d);
+        long skipControlDurationUs = C.TIME_UNSET;
+        if (skipControlDurationSec >= 0) {
+          skipControlDurationUs = (long) (skipControlDurationSec * C.MICROS_PER_SECOND);
+        }
+        @Nullable
+        String skipControlLabelId =
+            parseOptionalStringAttr(line, REGEX_SKIP_CONTROL_LABEL_ID, variableDefinitions);
+
         List<HlsMediaPlaylist.ClientDefinedAttribute> clientDefinedAttributes = new ArrayList<>();
         String attributes = line.substring("#EXT-X-DATERANGE:".length());
         Matcher matcher = REGEX_CLIENT_DEFINED_ATTRIBUTE_PREFIX.matcher(attributes);
@@ -1361,6 +1369,9 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
             case "X-CONTENT-MAY-VARY=": // fall through
             case "X-TIMELINE-OCCUPIES=": // fall through
             case "X-TIMELINE-STYLE=": // fall through
+            case "X-SKIP-CONTROL-OFFSET=": // fall through
+            case "X-SKIP-CONTROL-DURATION=": // fall through
+            case "X-SKIP-CONTROL-LABEL-ID=":
               // ignore interstitial attributes
               break;
             default:
@@ -1395,7 +1406,10 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
                 .setClientDefinedAttributes(clientDefinedAttributes)
                 .setContentMayVary(contentMayVary)
                 .setTimelineOccupies(timelineOccupies)
-                .setTimelineStyle(timelineStyle);
+                .setTimelineStyle(timelineStyle)
+                .setSkipControlOffsetUs(skipControlOffsetUs)
+                .setSkipControlDurationUs(skipControlDurationUs)
+                .setSkipControlLabelId(skipControlLabelId);
         interstitialBuilderMap.put(id, interstitialBuilder);
       } else if (!line.startsWith("#") || line.startsWith("#EXT-X-TWITCH-PREFETCH")) { // xtra: low latency
         @Nullable
@@ -1495,6 +1509,14 @@ public final class HlsPlaylistParser implements ParsingLoadable.Parser<HlsPlayli
       }
     }
 
+    if (playlistStartTimeUs == 0
+        && previousMediaPlaylist != null
+        && previousMediaPlaylist.hasProgramDateTime) {
+      // An EXT-X-PROGRAM-DATE-TIME can be removed from the new playlist if the segment it belonged
+      // to was removed. Make sure we propagate the start time from the previous playlist in such a
+      // case.
+      playlistStartTimeUs = previousMediaPlaylist.startTimeUs;
+    }
     return new HlsMediaPlaylist(
         playlistType,
         baseUri,

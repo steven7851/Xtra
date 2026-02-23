@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -30,7 +29,7 @@ android {
         minSdk = 23
         targetSdk = 36
         versionCode = 121
-        versionName = "2.51.1"
+        versionName = "2.54.2"
     }
 
     buildTypes {
@@ -67,18 +66,20 @@ android {
 }
 
 dependencies {
+    implementation("com.google.guava:guava:33.3.1-android") // exoplayer
     implementation("com.google.android.gms:play-services-cronet:18.1.0")
     implementation("com.google.mlkit:language-id:17.0.6")
     implementation("com.google.mlkit:translate:17.0.3")
 
     implementation(libs.material)
+    implementation(libs.markwon.core)
+    implementation(libs.markwon.linkify)
 
     implementation(libs.activity)
     implementation(libs.appcompat)
     implementation(libs.constraintlayout)
     implementation(libs.coordinatorlayout)
     implementation(libs.core.ktx)
-    implementation(libs.customview)
     implementation(libs.fragment.ktx)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.navigation.fragment)
@@ -128,8 +129,9 @@ ksp {
 }
 
 apollo {
+    @Suppress("ApolloEndpointNotConfigured")
     service("service") {
-        packageName.set("com.github.andreyasadchy.xtra")
+        packageName.set("com.github.andreyasadchy.xtra.graphql")
     }
 }
 

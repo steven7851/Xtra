@@ -54,7 +54,6 @@
     <string name="permission_denied">Gerekli izinler reddedildi</string>
     <string name="nothing_here">Burada hiçbir şey yok</string>
     <string name="watch_live">Canlı izle</string>
-    <string name="watch_rerun">Tekrarı izle</string>
     <string name="open_player">Oynatıcıyı aç</string>
     <string name="error_stream">Yayın yüklenirken hata oluştu</string>
     <string name="dark">Koyu</string>
@@ -84,8 +83,6 @@
     <string name="source_vod_start">Başlangıç: %s</string>
     <string name="source_vod_end">Bitiş: %s</string>
     <string name="stream_ended">Yayın sona erdi</string>
-    <string name="viewers_count">%s izleyici</string>
-    <string name="views">%s izlenme</string>
     <string name="download_pending">Beklemede</string>
     <string name="downloading_progress">İndiriliyor: %d%%</string>
     <string name="pause">Duraklat</string>
@@ -110,12 +107,9 @@
     <string name="playback_will_stop_hours_minutes">Oynatma %1$s %2$s içinde duracak</string>
     <string name="timer_canceled">Zamanlayıcı iptal edildi</string>
     <string name="trouble_logging_in">Giriş yaparken sorun mu yaşıyorsunuz?</string>
-    <string name="login_problem_solution">Harici bir tarayıcı kullanarak giriş yapabilirsiniz. \"Yetkilendir\" düğmesine bastıktan sonra bir hata sayfası görünmelidir. URL\'yi kopyalayın, buraya geri dönün ve \"URL gir\" düğmesine tıklayın. URL\'yi yapıştırın ve \"Giriş yap\"a tıklayın</string>
     <string name="no_browser_found">Tarayıcı uygulaması bulunamadı</string>
     <string name="browser_workaround">Sistem tarayıcınız artık desteklenmiyor. Lütfen bir çözüm için aşağıdaki düğmeye tıklayın</string>
     <string name="error">Hata: %s</string>
-    <string name="to_enter_url">URL gir</string>
-    <string name="enter_url">URL gir</string>
     <string name="invalid_url">Geçersiz URL</string>
     <string name="sort_and_order">Sıralama: %1$s. Düzen: %2$s</string>
     <string name="time_followed">Takip süresi</string>
@@ -130,7 +124,6 @@
     <string name="never">Asla</string>
     <string name="blue">Mavi</string>
     <string name="rounduserimage">Dairesel profil resimleri</string>
-    <string name="truncated_view_counts">Kısaltılmış izlenme sayıları</string>
     <string name="broadcastersCount">Oyunlarda yayıncı sayısını göster</string>
     <string name="startonfollowed">Takip edilenler sayfasında başlat</string>
     <string name="when_logged_in">Giriş yapıldığında</string>
@@ -151,7 +144,6 @@
     <string name="video_type_archive">Geçmiş yayın</string>
     <string name="video_type_highlight">Öne çıkan</string>
     <string name="video_type_upload">Yükleme</string>
-    <string name="video_type_rerun">Tekrar</string>
     <string name="all">Tümü</string>
     <string name="type">Tür</string>
     <string name="room_emote">İfade</string>
@@ -181,7 +173,6 @@
     <string name="timestamps">Zaman damgalarını göster</string>
     <string name="timestamp_format">Zaman damgası formatı</string>
     <string name="created_at">Oluşturulma tarihi: %s</string>
-    <string name="followers">%s takipçi</string>
     <string name="user_partner">Partner</string>
     <string name="user_affiliate">İştirak</string>
     <string name="user_staff">Çalışan</string>
@@ -397,7 +388,6 @@
     <string name="followed_games">Takip edilen oyunlar</string>
     <string name="irc_msgid_highlighted_message">Vurgulanan mesaj</string>
     <string name="irc_msgid_announcement">Duyuru</string>
-    <string name="debug_secondview">Uygulama içinde hareketli PIP</string>
     <string name="add_bookmark">Yer işareti ekle</string>
     <string name="show_vod_time_left">Yer imli yayın tekrarlarında kalan süreyi göster</string>
     <string name="vod_time_left">Otomatik silinmesine %s kaldı</string>
@@ -626,10 +616,10 @@
     <string name="prediction_title">Mevcut tahmin: %s</string>
     <string name="prediction_locked">Kilitli</string>
     <string name="prediction_refunded">İade edildi</string>
-    <string name="poll_choice">%1$d%% (%2$d): %3$s</string>
-    <string name="poll_choice_winner">🏆%1$d%% (%2$d): %3$s</string>
-    <string name="prediction_outcome">%1$d%% (%2$d💎, %3$d👥): %4$s</string>
-    <string name="prediction_outcome_winner">🏆%1$d%% (%2$d💎, %3$d👥): %4$s</string>
+    <string name="poll_choice">%1$d%% (%2$s): %3$s</string>
+    <string name="poll_choice_winner">🏆%1$d%% (%2$s): %3$s</string>
+    <string name="prediction_outcome">%1$d%% (%2$s💎, %3$s👥): %4$s</string>
+    <string name="prediction_outcome_winner">🏆%1$d%% (%2$s💎, %3$s👥): %4$s</string>
     <string name="api_token_settings">API token ayarları</string>
     <string name="download_settings">İndirmeler</string>
     <string name="update_settings">Güncelleme ayarları</string>
@@ -677,7 +667,6 @@
     <string name="use_background_audio">Arka planda ses çal</string>
     <string name="avoid_rounded_corners">Yuvarlatılmış ekran köşelerinden kaçın</string>
     <string name="api_web_gql_token">Web GQL token\'ı</string>
-    <string name="use_new_pubsub">Yeni PubSub URL\'sini kullan</string>
     <string name="chat_size_modifier">Boyut değiştirici</string>
     <string name="chat_emote_size">İfade boyutu</string>
     <string name="chat_badge_size">Rozet boyutu</string>
@@ -694,7 +683,6 @@
     <string name="download_language_model_message">Download language model for %s?</string>
     <string name="translate_from_selected">Translate from selected language</string>
     <string name="translate_all_messages">Translate all messages on this channel</string>
-    <string name="use_custom_websockets">Use custom WebSockets</string>
     <string name="show_more_websocket_info">Show more info about WebSockets</string>
     <string name="websocket_connected">%s: Connected</string>
     <string name="websocket_disconnected">%1$s: Disconnected - %2$s</string>
@@ -715,4 +703,31 @@
     <string name="save_filters">Save filters</string>
     <string name="delete_filter_message">Are you sure you want to delete this filter?</string>
     <string name="use_custom_playback_service">Use custom playback service</string>
+    <string name="move_player_freely">Move minimized player freely</string>
+    <string name="store_recent_searches">Store recent searches</string>
+    <string name="delete_recent_searches">Delete recent searches</string>
+    <string name="delete_recent_searches_message">Are you sure you want to delete all recent searches?</string>
+    <string name="deletion_date">Deletion date</string>
+    <string name="creation_date">Creation date</string>
+    <string name="saved_date">Saved date</string>
+    <string name="about">About</string>
+    <string name="team">Team: %s</string>
+    <string name="owner">Owner: %s</string>
+    <string name="use_background_audio_locked">Play audio in the background when locking the screen</string>
+    <string name="use_background_audio_pip_closed">Play audio in the background when closing PiP</string>
+    <string name="use_background_audio_pip_locked">Play audio in the background when locking the screen in PiP mode</string>
+    <string name="old_username">Old name: %s</string>
+    <string name="default_cellular_quality">Default player quality on cellular network</string>
+    <string name="player">Player</string>
+    <string name="compact_number_formatting">Compact number formatting</string>
+    <string name="less_rounded_corners">Less rounded</string>
+    <string name="reduced_padding">Reduced padding</string>
+    <string name="compact_text">Compact text</string>
+    <string name="next">Next</string>
+    <string name="tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the web page.\n• Press the \"Next\" button at the bottom.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".</string>
+    <string name="open_url">Open URL</string>
+    <string name="external_login_message">You can log in using an external browser.\n\nFollow these steps:\n• Press \"Open URL\" to open the login page.\n• Login to your account and press \"Authorize\".\n• A page with an error should appear. Copy the URL of that page, paste the URL into the box below and press \"OK\".</string>
+    <string name="loading">Loading...</string>
+    <string name="copy_code">Copy code</string>
+    <string name="external_tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the screen.\n• Press the \"Open URL\" button.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".\n• Return to Xtra and press \"Next\".</string>
 </resources>

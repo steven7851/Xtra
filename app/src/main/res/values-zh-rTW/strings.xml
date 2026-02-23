@@ -53,7 +53,6 @@
     <string name="permission_denied">所需的權限被拒絕</string>
     <string name="nothing_here">這裡什麼都沒有</string>
     <string name="watch_live">觀看實況</string>
-    <string name="watch_rerun">觀看重播</string>
     <string name="open_player">開啟播放器</string>
     <string name="error_stream">載入串流時發生錯誤</string>
     <string name="dark">深色</string>
@@ -83,8 +82,6 @@
     <string name="source_vod_start">開始：%s</string>
     <string name="source_vod_end">結束：%s</string>
     <string name="stream_ended">直播已結束</string>
-    <string name="viewers_count">%s 觀眾</string>
-    <string name="views">%s 觀看</string>
     <string name="download_pending">擱置</string>
     <string name="downloading_progress">正在下載：%d%%</string>
     <string name="pause">暫停</string>
@@ -109,12 +106,9 @@
     <string name="playback_will_stop_hours_minutes">播放將停止在 %1$s %2$s</string>
     <string name="timer_canceled">定時器已被取消</string>
     <string name="trouble_logging_in">登入時發生問題？</string>
-    <string name="login_problem_solution">您可以使用外部瀏覽器登入。 在您按下「授權」後，應該會出現一個有錯誤的頁面。複製這個 URL，返回這裡並且點擊「輸入 URL」按鈕。 貼上此 URL 並點擊「登入」</string>
     <string name="no_browser_found">沒有發現瀏覽器應用程式</string>
     <string name="browser_workaround">您的系統瀏覽器不再受支援。請點擊下面的按鈕以取得解決方法</string>
     <string name="error">錯誤：%s</string>
-    <string name="to_enter_url">輸入 URL</string>
-    <string name="enter_url">輸入 URL</string>
     <string name="invalid_url">無效 URL</string>
     <string name="sort_and_order">排序依據：%1$s。排序：%2$s</string>
     <string name="time_followed">追隨的時間</string>
@@ -129,7 +123,6 @@
     <string name="never">永不</string>
     <string name="blue">藍色</string>
     <string name="rounduserimage">圓形個人檔案圖片</string>
-    <string name="truncated_view_counts">簡易的觀看數量</string>
     <string name="broadcastersCount">在遊戲項目上顯示實況者數量</string>
     <string name="startonfollowed">開始於追隨中頁面</string>
     <string name="when_logged_in">登入時</string>
@@ -150,7 +143,6 @@
     <string name="video_type_archive">過去的直播</string>
     <string name="video_type_highlight">精華片段</string>
     <string name="video_type_upload">上傳</string>
-    <string name="video_type_rerun">重播</string>
     <string name="all">所有</string>
     <string name="type">類型</string>
     <string name="room_emote">表情符號</string>
@@ -180,7 +172,6 @@
     <string name="timestamps">顯示時間戳記</string>
     <string name="timestamp_format">時間戳記格式</string>
     <string name="created_at">建立於 %s</string>
-    <string name="followers">%s 追隨者</string>
     <string name="user_partner">合作夥伴</string>
     <string name="user_affiliate">實況盟友</string>
     <string name="user_staff">工作人員</string>
@@ -396,7 +387,6 @@
     <string name="followed_games">追隨的遊戲</string>
     <string name="irc_msgid_highlighted_message">醒目的訊息</string>
     <string name="irc_msgid_announcement">公告</string>
-    <string name="debug_secondview">在應用程式子母畫面中可動的</string>
     <string name="add_bookmark">加入書籤</string>
     <string name="show_vod_time_left">在加入書籤的 VOD 中顯示剩餘時間</string>
     <string name="vod_time_left">在 %s 內自動刪除</string>
@@ -625,10 +615,10 @@
     <string name="prediction_title">目前賽況預測：%s</string>
     <string name="prediction_locked">已鎖定</string>
     <string name="prediction_refunded">退還</string>
-    <string name="poll_choice">%1$d%% (%2$d): %3$s</string>
-    <string name="poll_choice_winner">🏆%1$d%% (%2$d): %3$s</string>
-    <string name="prediction_outcome">%1$d%% (%2$d💎, %3$d👥): %4$s</string>
-    <string name="prediction_outcome_winner">🏆%1$d%% (%2$d💎, %3$d👥): %4$s</string>
+    <string name="poll_choice">%1$d%% (%2$s): %3$s</string>
+    <string name="poll_choice_winner">🏆%1$d%% (%2$s): %3$s</string>
+    <string name="prediction_outcome">%1$d%% (%2$s💎, %3$s👥): %4$s</string>
+    <string name="prediction_outcome_winner">🏆%1$d%% (%2$s💎, %3$s👥): %4$s</string>
     <string name="api_token_settings">API 權杖設定</string>
     <string name="download_settings">下載</string>
     <string name="update_settings">更新設定</string>
@@ -676,7 +666,6 @@
     <string name="use_background_audio">在背景播放音訊</string>
     <string name="avoid_rounded_corners">避開螢幕圓角</string>
     <string name="api_web_gql_token">Web GQL 權杖</string>
-    <string name="use_new_pubsub">使用新的 PubSub URL</string>
     <string name="chat_size_modifier">大小修改</string>
     <string name="chat_emote_size">表情符號大小</string>
     <string name="chat_badge_size">徽章大小</string>
@@ -693,7 +682,6 @@
     <string name="download_language_model_message">Download language model for %s?</string>
     <string name="translate_from_selected">Translate from selected language</string>
     <string name="translate_all_messages">Translate all messages on this channel</string>
-    <string name="use_custom_websockets">Use custom WebSockets</string>
     <string name="show_more_websocket_info">Show more info about WebSockets</string>
     <string name="websocket_connected">%s: Connected</string>
     <string name="websocket_disconnected">%1$s: Disconnected - %2$s</string>
@@ -714,4 +702,31 @@
     <string name="save_filters">Save filters</string>
     <string name="delete_filter_message">Are you sure you want to delete this filter?</string>
     <string name="use_custom_playback_service">Use custom playback service</string>
+    <string name="move_player_freely">Move minimized player freely</string>
+    <string name="store_recent_searches">Store recent searches</string>
+    <string name="delete_recent_searches">Delete recent searches</string>
+    <string name="delete_recent_searches_message">Are you sure you want to delete all recent searches?</string>
+    <string name="deletion_date">Deletion date</string>
+    <string name="creation_date">Creation date</string>
+    <string name="saved_date">Saved date</string>
+    <string name="about">About</string>
+    <string name="team">Team: %s</string>
+    <string name="owner">Owner: %s</string>
+    <string name="use_background_audio_locked">Play audio in the background when locking the screen</string>
+    <string name="use_background_audio_pip_closed">Play audio in the background when closing PiP</string>
+    <string name="use_background_audio_pip_locked">Play audio in the background when locking the screen in PiP mode</string>
+    <string name="old_username">Old name: %s</string>
+    <string name="default_cellular_quality">Default player quality on cellular network</string>
+    <string name="player">Player</string>
+    <string name="compact_number_formatting">Compact number formatting</string>
+    <string name="less_rounded_corners">Less rounded</string>
+    <string name="reduced_padding">Reduced padding</string>
+    <string name="compact_text">Compact text</string>
+    <string name="next">Next</string>
+    <string name="tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the web page.\n• Press the \"Next\" button at the bottom.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".</string>
+    <string name="open_url">Open URL</string>
+    <string name="external_login_message">You can log in using an external browser.\n\nFollow these steps:\n• Press \"Open URL\" to open the login page.\n• Login to your account and press \"Authorize\".\n• A page with an error should appear. Copy the URL of that page, paste the URL into the box below and press \"OK\".</string>
+    <string name="loading">Loading...</string>
+    <string name="copy_code">Copy code</string>
+    <string name="external_tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the screen.\n• Press the \"Open URL\" button.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".\n• Return to Xtra and press \"Next\".</string>
 </resources>

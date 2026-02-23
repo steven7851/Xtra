@@ -1,33 +1,9 @@
 package com.github.andreyasadchy.xtra.util
 
-import android.content.Context
-import android.graphics.Color
 import android.graphics.Rect
-import android.view.MotionEvent
 import android.view.View
-import android.view.inputmethod.InputMethodManager
-import android.widget.ImageView
-import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
-
-fun View.visible() {
-    visibility = View.VISIBLE
-}
-
-fun View.invisible() {
-    visibility = View.INVISIBLE
-}
-
-fun View.gone() {
-    visibility = View.GONE
-}
-
-fun View.toggleVisibility() = if (isVisible) gone() else visible()
-
-fun View.hideKeyboard() {
-    (context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(windowToken, 0)
-}
 
 val View.isKeyboardShown: Boolean
     get() {
@@ -41,16 +17,6 @@ val View.isKeyboardShown: Boolean
         return keypadHeight > screenHeight * 0.15
     }
 
-fun ImageView.enable() {
-    isEnabled = true
-    setColorFilter(Color.WHITE)
-}
-
-fun ImageView.disable() {
-    isEnabled = false
-    setColorFilter(Color.GRAY)
-}
-
 fun ViewPager2.reduceDragSensitivity() {
     try {
         val recyclerViewField = ViewPager2::class.java.getDeclaredField("mRecyclerView")
@@ -62,19 +28,5 @@ fun ViewPager2.reduceDragSensitivity() {
         val touchSlop = touchSlopField.get(recyclerView) as Int
         touchSlopField.set(recyclerView, touchSlop * 2)
     } catch (e: Exception) {
-    }
-}
-
-fun MotionEvent.isClick(outDownLocation: FloatArray): Boolean {
-    return when (actionMasked) {
-        MotionEvent.ACTION_DOWN -> {
-            outDownLocation[0] = x
-            outDownLocation[1] = y
-            false
-        }
-        MotionEvent.ACTION_UP -> {
-            outDownLocation[0] in x - 50..x + 50 && outDownLocation[1] in y - 50..y + 50 && eventTime - downTime <= 500
-        }
-        else -> false
     }
 }

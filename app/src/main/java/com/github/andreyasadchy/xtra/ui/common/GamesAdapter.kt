@@ -1,5 +1,6 @@
 package com.github.andreyasadchy.xtra.ui.common
 
+import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -25,10 +26,7 @@ import com.github.andreyasadchy.xtra.ui.game.GameMediaFragmentDirections
 import com.github.andreyasadchy.xtra.ui.game.GamePagerFragmentDirections
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.convertDpToPixels
-import com.github.andreyasadchy.xtra.util.gone
 import com.github.andreyasadchy.xtra.util.prefs
-import com.github.andreyasadchy.xtra.util.visible
 
 class GamesAdapter(
     private val fragment: Fragment,
@@ -65,19 +63,21 @@ class GamesAdapter(
                                 GamePagerFragmentDirections.actionGlobalGamePagerFragment(
                                     gameId = item.gameId,
                                     gameSlug = item.gameSlug,
-                                    gameName = item.gameName
+                                    gameName = item.gameName,
+                                    boxArt = item.boxArt
                                 )
                             } else {
                                 GameMediaFragmentDirections.actionGlobalGameMediaFragment(
                                     gameId = item.gameId,
                                     gameSlug = item.gameSlug,
-                                    gameName = item.gameName
+                                    gameName = item.gameName,
+                                    boxArt = item.boxArt
                                 )
                             }
                         )
                     }
                     if (item.boxArt != null) {
-                        gameImage.visible()
+                        gameImage.visibility = View.VISIBLE
                         fragment.requireContext().imageLoader.enqueue(
                             ImageRequest.Builder(fragment.requireContext()).apply {
                                 data(item.boxArt)
@@ -86,29 +86,39 @@ class GamesAdapter(
                             }.build()
                         )
                     } else {
-                        gameImage.gone()
+                        gameImage.visibility = View.GONE
                     }
                     if (item.gameName != null) {
-                        gameName.visible()
+                        gameName.visibility = View.VISIBLE
                         gameName.text = item.gameName
                     } else {
-                        gameName.gone()
+                        gameName.visibility = View.GONE
                     }
                     if (item.viewersCount != null) {
-                        viewers.visible()
-                        viewers.text = TwitchApiHelper.formatViewersCount(context, item.viewersCount!!, context.prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                        viewers.visibility = View.VISIBLE
+                        val count = item.viewersCount ?: 0
+                        viewers.text = context.resources.getQuantityString(
+                            R.plurals.viewers,
+                            count,
+                            TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                        )
                     } else {
-                        viewers.gone()
+                        viewers.visibility = View.GONE
                     }
                     if (item.broadcastersCount != null && context.prefs().getBoolean(C.UI_BROADCASTERSCOUNT, true)) {
-                        broadcastersCount.visible()
-                        broadcastersCount.text = context.resources.getQuantityString(R.plurals.broadcasters, item.broadcastersCount!!, item.broadcastersCount)
+                        broadcastersCount.visibility = View.VISIBLE
+                        val count = item.broadcastersCount ?: 0
+                        broadcastersCount.text = context.resources.getQuantityString(
+                            R.plurals.broadcasters,
+                            count,
+                            TwitchApiHelper.formatCount(count, context.prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                        )
                     } else {
-                        broadcastersCount.gone()
+                        broadcastersCount.visibility = View.GONE
                     }
                     if (!item.tags.isNullOrEmpty() && context.prefs().getBoolean(C.UI_TAGS, true)) {
                         tagsLayout.removeAllViews()
-                        tagsLayout.visible()
+                        tagsLayout.visibility = View.VISIBLE
                         val tagsFlowLayout = Flow(context).apply {
                             layoutParams = ConstraintLayout.LayoutParams(
                                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -137,13 +147,13 @@ class GamesAdapter(
                                     selectTag(tag)
                                 }
                             }
-                            val padding = context.convertDpToPixels(5f)
+                            val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 5f, context.resources.displayMetrics).toInt()
                             text.setPadding(padding, 0, padding, 0)
                             tagsLayout.addView(text)
                         }
                         tagsFlowLayout.referencedIds = ids.toIntArray()
                     } else {
-                        tagsLayout.gone()
+                        tagsLayout.visibility = View.GONE
                     }
                 }
             }

@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.toast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,7 +42,7 @@ class DownloadViewModel @Inject constructor(
                         val map = if (!channelLogin.isNullOrBlank()) {
                             val playlist = playerRepository.loadStreamPlaylist(networkLibrary, gqlHeaders, channelLogin, randomDeviceId, xDeviceId, playerType, supportedCodecs, enableIntegrity)
                             if (!playlist.isNullOrBlank()) {
-                                val names = Regex("NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
+                                val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
                                 val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
                                 val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
                                 val codecList = codecs.map { codec ->
@@ -163,14 +162,14 @@ class DownloadViewModel @Inject constructor(
                             val playlist = result.first
                             backupQualities = result.second
                             if (!playlist.isNullOrBlank()) {
-                                val names = Regex("NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
+                                val names = Regex("IVS-NAME=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
                                 val codecs = Regex("CODECS=\"(.+?)\"").findAll(playlist).mapNotNull { it.groups[1]?.value }.toMutableList()
                                 val urls = Regex("https://.*\\.m3u8").findAll(playlist).map(MatchResult::value).toMutableList()
                                 playlist.lines().filter { it.startsWith("#EXT-X-SESSION-DATA") }.let { list ->
                                     if (list.isNotEmpty()) {
                                         val url = urls.firstOrNull()?.takeIf { it.contains("/index-") }
-                                        val groupId = Regex("GROUP-ID=\"(.+?)\"").find(playlist)?.groups?.get(1)?.value
-                                        if (url != null && groupId != null) {
+                                        val variantId = Regex("STABLE-VARIANT-ID=\"(.+?)\"").find(playlist)?.groups?.get(1)?.value
+                                        if (url != null && variantId != null) {
                                             list.forEach { line ->
                                                 val id = Regex("DATA-ID=\"(.+?)\"").find(line)?.groups?.get(1)?.value
                                                 if (id == "com.amazon.ivs.unavailable-media") {
@@ -204,15 +203,22 @@ class DownloadViewModel @Inject constructor(
                                                                             }
                                                                         }
                                                                         if (!skip) {
-                                                                            val name = obj.optString("NAME")
+                                                                            val name = obj.optString("IVS_NAME")
                                                                             val codec = obj.optString("CODECS")
-                                                                            val newGroupId = obj.optString("GROUP-ID")
-                                                                            if (!name.isNullOrBlank() && !newGroupId.isNullOrBlank()) {
+                                                                            val newVariantId = obj.optString("STABLE-VARIANT-ID")
+                                                                            if (!name.isNullOrBlank() && !newVariantId.isNullOrBlank()) {
                                                                                 names.add(name)
                                                                                 if (!codec.isNullOrBlank()) {
                                                                                     codecs.add(codec)
                                                                                 }
-                                                                                urls.add(url.replace("$groupId/index-", "$newGroupId/index-"))
+                                                                                urls.add(url.replace(
+                                                                                    "$variantId/index-",
+                                                                                    if (urls.find { it.contains("chunked/index-") } == null && newVariantId != "audio_only") {
+                                                                                        "chunked/index-"
+                                                                                    } else {
+                                                                                        "$newVariantId/index-"
+                                                                                    }
+                                                                                ))
                                                                             }
                                                                         }
                                                                     }
@@ -296,7 +302,6 @@ class DownloadViewModel @Inject constructor(
                             integrity.value = "refresh"
                         }
                         if (e is IllegalAccessException) {
-                            applicationContext.toast(ContextCompat.getString(applicationContext, R.string.video_subscribers_only))
                             dismiss.value = true
                         }
                     }
