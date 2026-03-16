@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.chromium.net.CronetEngine
@@ -37,7 +38,6 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import javax.inject.Inject
-import kotlin.coroutines.suspendCoroutine
 
 @HiltViewModel
 class ChannelPagerViewModel @Inject constructor(
@@ -300,12 +300,12 @@ class ChannelPagerViewModel @Inject constructor(
         }
     }
 
-    fun saveFollowChannel(userId: String?, channelId: String?, channelLogin: String?, channelName: String?, setting: Int, notificationsEnabled: Boolean, networkLibrary: String?, gqlHeaders: Map<String, String>, enableIntegrity: Boolean) {
+    fun saveFollowChannel(userId: String?, channelId: String?, channelLogin: String?, channelName: String?, setting: Int, liveNotificationsEnabled: Boolean, disableNotifications: Boolean, networkLibrary: String?, gqlHeaders: Map<String, String>, enableIntegrity: Boolean) {
         viewModelScope.launch {
             try {
                 if (!channelId.isNullOrBlank()) {
                     if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
-                        val errorMessage = graphQLRepository.loadFollowUser(networkLibrary, gqlHeaders, channelId).also { response ->
+                        val errorMessage = graphQLRepository.loadFollowUser(networkLibrary, gqlHeaders, channelId, disableNotifications).also { response ->
                             if (enableIntegrity && integrity.value == null) {
                                 response.errors?.find { it.message == "failed integrity check" }?.let {
                                     integrity.value = "follow"
@@ -318,8 +318,10 @@ class ChannelPagerViewModel @Inject constructor(
                         } else {
                             _isFollowing.value = true
                             follow.value = Pair(true, null)
-                            _notificationsEnabled.value = true
-                            if (notificationsEnabled) {
+                            if (!disableNotifications) {
+                                _notificationsEnabled.value = true
+                            }
+                            if (liveNotificationsEnabled) {
                                 _stream.value?.startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
                                     shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
@@ -329,9 +331,11 @@ class ChannelPagerViewModel @Inject constructor(
                         localFollowsChannel.saveFollow(LocalFollowChannel(channelId, channelLogin, channelName))
                         _isFollowing.value = true
                         follow.value = Pair(true, null)
-                        notificationUsersRepository.saveUser(NotificationUser(channelId))
-                        _notificationsEnabled.value = true
-                        if (notificationsEnabled) {
+                        if (!disableNotifications) {
+                            notificationUsersRepository.saveUser(NotificationUser(channelId))
+                            _notificationsEnabled.value = true
+                        }
+                        if (liveNotificationsEnabled) {
                             _stream.value?.startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
                                 shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
@@ -390,7 +394,7 @@ class ChannelPagerViewModel @Inject constructor(
                             try {
                                 when {
                                     networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
-                                        val response = suspendCoroutine { continuation ->
+                                        val response = suspendCancellableCoroutine { continuation ->
                                             httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
@@ -410,7 +414,7 @@ class ChannelPagerViewModel @Inject constructor(
                                                 }
                                             }
                                         } else {
-                                            val response = suspendCoroutine { continuation ->
+                                            val response = suspendCancellableCoroutine { continuation ->
                                                 cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
                                             }
                                             if (response.first.httpStatusCode in 200..299) {
