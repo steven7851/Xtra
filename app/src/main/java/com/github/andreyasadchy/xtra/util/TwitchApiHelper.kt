@@ -80,15 +80,11 @@ object TwitchApiHelper {
         }
     }
 
-    fun getDuration(duration: String): Long? {
-        return duration.toLongOrNull() ?: try {
-            val h = duration.substringBefore("h", "0").takeLast(2).filter { it.isDigit() }.toInt()
-            val m = duration.substringBefore("m", "0").takeLast(2).filter { it.isDigit() }.toInt()
-            val s = duration.substringBefore("s", "0").takeLast(2).filter { it.isDigit() }.toInt()
-            ((h * 3600) + (m * 60) + s).toLong()
-        } catch (e: Exception) {
-            null
-        }
+    fun getDuration(duration: String): Int {
+        val h = duration.substringBefore("h", "0").takeLastWhile { it.isDigit() }.toIntOrNull() ?: 0
+        val m = duration.substringBefore("m", "0").takeLastWhile { it.isDigit() }.toIntOrNull() ?: 0
+        val s = duration.substringBefore("s", "0").takeLastWhile { it.isDigit() }.toIntOrNull() ?: 0
+        return (h * 3600) + (m * 60) + s
     }
 
     fun getDurationFromSeconds(context: Context, input: String?, text: Boolean = true): String? {
@@ -372,11 +368,15 @@ object TwitchApiHelper {
         return System.currentTimeMillis() >= context.tokenPrefs().getLong(C.INTEGRITY_EXPIRATION, 0)
     }
 
-    fun getVideoUrlMapFromPreview(url: String, type: String?, list: List<String>?): Map<String, String> {
+    fun getVideoUrlsFromPreview(url: String, type: String?, list: List<String>?): Map<String, String> {
         val qualityList = list ?: listOf("chunked", "1080p60", "1080p30", "720p60", "720p30", "480p30", "360p30", "160p30", "144p30", "high", "medium", "low", "mobile", "audio_only")
-        val map = mutableMapOf<String, String>()
-        qualityList.forEach { quality ->
-            map[if (quality == "chunked") "source" else quality] = url
+        return qualityList.associate { quality ->
+            val name = if (quality == "chunked") {
+                "source"
+            } else {
+                quality
+            }
+            val url = url
                 .replace("storyboards", quality)
                 .replaceAfterLast("/",
                     if (type?.lowercase() == "highlight") {
@@ -385,8 +385,8 @@ object TwitchApiHelper {
                         "index-dvr.m3u8"
                     }
                 )
+            name to url
         }
-        return map
     }
 
     fun getMessageIdString(msgId: String?): String? {

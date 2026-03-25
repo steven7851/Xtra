@@ -160,7 +160,6 @@
     <string name="chat_first">Première fois sur le chat</string>
     <string name="chat_reward">Échange de points de chaîne</string>
     <string name="always">Toujours</string>
-    <string name="twitch">Twitch</string>
     <string name="local">Local</string>
     <string name="days">j</string>
     <string name="seconds">s</string>
@@ -458,11 +457,6 @@
     <string name="api_validate_tokens">Valider les jetons au démarrage</string>
     <string name="followed_only">Suivis seulement</string>
     <string name="debug_api_commands">Utiliser les commandes API de chat</string>
-    <string name="skip_video_access_token">Ignorer le jeton d\'accès video</string>
-    <string name="skipVideoTokenEntries1">Toujours ignorer</string>
-    <string name="skipVideoTokenEntries2">Ignorer par défaut, ne pas ignorer si la lecture échoue</string>
-    <string name="skipVideoTokenEntries3">Ne pas ignorer par défaut, ignorer si la lecture échoue</string>
-    <string name="skipVideoTokenEntries4">Ne jamais ignorer</string>
     <string name="stream_live">%s est maintenant en ligne</string>
     <string name="stream_offline">%s est maintenant hors ligne</string>
     <string name="keep_screen_on_when_paused">Garder l\'écran allumé lorsque la vidéo est en pause</string>
@@ -730,4 +724,5 @@
     <string name="copy_code">Copy code</string>
     <string name="external_tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the screen.\n• Press the \"Open URL\" button.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".\n• Return to Xtra and press \"Next\".</string>
     <string name="activate_notifications_when_following">Activate notifications when following</string>
+    <string name="account">Account</string>
 </resources>

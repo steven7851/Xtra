@@ -1,6 +1,5 @@
 package com.github.andreyasadchy.xtra.repository
 
-import android.net.Uri
 import android.net.http.HttpEngine
 import android.os.Build
 import android.os.ext.SdkExtensions
@@ -17,7 +16,9 @@ import com.github.andreyasadchy.xtra.db.VideoPositionsDao
 import com.github.andreyasadchy.xtra.graphql.StreamPlaybackAccessTokenQuery
 import com.github.andreyasadchy.xtra.graphql.type.BadgeImageSize
 import com.github.andreyasadchy.xtra.graphql.type.EmoteType
+import com.github.andreyasadchy.xtra.model.PlaybackState
 import com.github.andreyasadchy.xtra.model.VideoPosition
+import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.model.chat.CheerEmote
 import com.github.andreyasadchy.xtra.model.chat.Emote
 import com.github.andreyasadchy.xtra.model.chat.RecentEmote
@@ -78,6 +79,7 @@ class PlayerRepository @Inject constructor(
     private val helixRepository: HelixRepository,
     private val recentEmotes: RecentEmotesDao,
     private val videoPositions: VideoPositionsDao,
+    private val playbackStatesRepository: PlaybackStatesRepository,
 ) {
 
     suspend fun loadStreamPlaylistUrl(networkLibrary: String?, gqlHeaders: Map<String, String>, channelLogin: String, randomDeviceId: Boolean?, xDeviceId: String?, playerType: String?, supportedCodecs: String?, proxyPlaybackAccessToken: Boolean, proxyHost: String?, proxyPort: Int?, proxyUser: String?, proxyPassword: String?, enableIntegrity: Boolean): String = withContext(Dispatchers.IO) {
@@ -86,6 +88,8 @@ class PlayerRepository @Inject constructor(
                 loadStreamPlaybackAccessToken(networkLibrary, gqlHeaders.filterNot { it.key == C.HEADER_TOKEN }, channelLogin, randomDeviceId, xDeviceId, playerType, proxyPlaybackAccessToken, proxyHost, proxyPort, proxyUser, proxyPassword, enableIntegrity)
             } else token
         }
+        val signature = accessToken.first
+        val token = accessToken.second
         "https://usher.ttvnw.net/api/v2/channel/hls/${channelLogin}.m3u8".toUri().buildUpon().apply {
             appendQueryParameter("allow_source", "true")
             appendQueryParameter("allow_audio_only", "true")
@@ -94,9 +98,9 @@ class PlayerRepository @Inject constructor(
             if (supportedCodecs?.contains("av1", true) == true) {
                 appendQueryParameter("platform", "web")
             }
-            accessToken.first?.let { appendQueryParameter("sig", it) }
+            signature?.let { appendQueryParameter("sig", it) }
             supportedCodecs?.let { appendQueryParameter("supported_codecs", it) }
-            accessToken.second?.let { appendQueryParameter("token", it) }
+            token?.let { appendQueryParameter("token", it) }
         }.build().toString()
     }
 
@@ -261,8 +265,10 @@ class PlayerRepository @Inject constructor(
                 it.signature to it.value
             }
         }
+        val signature = accessToken.first
+        val token = accessToken.second
         val backupQualities = mutableListOf<String>()
-        accessToken.second?.let { value ->
+        token?.let { value ->
             val json = try {
                 JSONObject(value)
             } catch (e: JSONException) {
@@ -286,9 +292,9 @@ class PlayerRepository @Inject constructor(
             if (supportedCodecs?.contains("av1", true) == true) {
                 appendQueryParameter("platform", "web")
             }
-            accessToken.first?.let { appendQueryParameter("sig", it) }
+            signature?.let { appendQueryParameter("sig", it) }
             supportedCodecs?.let { appendQueryParameter("supported_codecs", it) }
-            accessToken.second?.let { appendQueryParameter("token", it) }
+            token?.let { appendQueryParameter("token", it) }
         }.build().toString()
         url to backupQualities
     }
@@ -348,7 +354,7 @@ class PlayerRepository @Inject constructor(
         }
     }
 
-    suspend fun loadClipUrls(networkLibrary: String?, gqlHeaders: Map<String, String>, clipId: String?, enableIntegrity: Boolean): Map<Pair<String, String?>, String>? = withContext(Dispatchers.IO) {
+    suspend fun loadClipQualities(networkLibrary: String?, gqlHeaders: Map<String, String>, clipId: String?, enableIntegrity: Boolean): List<VideoQuality>? = withContext(Dispatchers.IO) {
         try {
             val response = graphQLRepository.loadClipUrls(networkLibrary, gqlHeaders, clipId)
             if (enableIntegrity) {
@@ -368,10 +374,13 @@ class PlayerRepository @Inject constructor(
                         } else {
                             index.toString()
                         }
-                        val url = "${quality.sourceURL}?sig=${Uri.encode(accessToken?.signature)}&token=${Uri.encode(accessToken?.value)}"
-                        Pair(name, quality.codecs) to url
+                        val url = quality.sourceURL.toUri().buildUpon().apply {
+                            appendQueryParameter("sig", accessToken?.signature)
+                            appendQueryParameter("token", accessToken?.value)
+                        }.build().toString()
+                        VideoQuality(name, quality.codecs, url)
                     } else null
-                }?.toMap()
+                }
             }
         } catch (e: Exception) {
             if (e.message == "failed integrity check") throw e
@@ -393,10 +402,13 @@ class PlayerRepository @Inject constructor(
                         } else {
                             index.toString()
                         }
-                        val url = "${quality.sourceURL}?sig=${Uri.encode(accessToken?.signature)}&token=${Uri.encode(accessToken?.value)}"
-                        Pair(name, quality.codecs) to url
+                        val url = quality.sourceURL.toUri().buildUpon().apply {
+                            appendQueryParameter("sig", accessToken?.signature)
+                            appendQueryParameter("token", accessToken?.value)
+                        }.build().toString()
+                        VideoQuality(name, quality.codecs, url)
                     } else null
-                }?.toMap()
+                }
             }
         }
     }
@@ -1465,5 +1477,15 @@ class PlayerRepository @Inject constructor(
 
     suspend fun deleteVideoPositions() = withContext(Dispatchers.IO) {
         videoPositions.deleteAll()
+    }
+
+    suspend fun getPlaybackStates() = playbackStatesRepository.loadStates()
+
+    suspend fun savePlaybackStates(items: List<PlaybackState>) = withContext(Dispatchers.IO) {
+        playbackStatesRepository.saveStates(items)
+    }
+
+    suspend fun deletePlaybackStates() = withContext(Dispatchers.IO) {
+        playbackStatesRepository.deleteStates()
     }
 }

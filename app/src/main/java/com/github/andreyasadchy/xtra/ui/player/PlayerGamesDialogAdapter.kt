@@ -43,6 +43,7 @@ class PlayerGamesDialogAdapter(
                 val context = fragment.requireContext()
                 root.setOnClickListener {
                     item?.vodPosition?.let { position ->
+                        (fragment.parentFragment as? Media3PlayerFragment)?.seek(position.toLong()) ?:
                         (fragment.parentFragment as? PlayerFragment)?.seek(position.toLong())
                     }
                     (fragment as? PlayerGamesDialog)?.dismiss()
@@ -59,9 +60,9 @@ class PlayerGamesDialogAdapter(
                 } else {
                     gameImage.visibility = View.GONE
                 }
-                if (item?.gameName != null) {
+                if (item?.name != null) {
                     gameName.visibility = View.VISIBLE
-                    gameName.text = item.gameName
+                    gameName.text = item.name
                 } else {
                     gameName.visibility = View.GONE
                 }

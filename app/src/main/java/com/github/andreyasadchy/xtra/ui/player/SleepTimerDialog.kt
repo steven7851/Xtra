@@ -9,7 +9,6 @@ import android.content.DialogInterface
 import android.content.Intent
 import android.os.Bundle
 import androidx.core.content.edit
-import androidx.core.os.bundleOf
 import androidx.fragment.app.DialogFragment
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.databinding.DialogSleepTimerBinding
@@ -24,7 +23,9 @@ class SleepTimerDialog : DialogFragment() {
 
         fun newInstance(timeLeft: Long): SleepTimerDialog {
             return SleepTimerDialog().apply {
-                arguments = bundleOf(KEY_TIME_LEFT to timeLeft)
+                arguments = Bundle().apply {
+                    putLong(KEY_TIME_LEFT, timeLeft)
+                }
             }
         }
     }
@@ -47,6 +48,7 @@ class SleepTimerDialog : DialogFragment() {
                 maxValue = 59
             }
             val positiveListener: (dialog: DialogInterface, which: Int) -> Unit = { _, _ ->
+                (parentFragment as? Media3PlayerFragment)?.onSleepTimerChanged(hours.value * 3600_000L + minutes.value * 60_000L,  hours.value, minutes.value, lockCheckbox.isChecked) ?:
                 (parentFragment as? PlayerFragment)?.onSleepTimerChanged(hours.value * 3600_000L + minutes.value * 60_000L,  hours.value, minutes.value, lockCheckbox.isChecked)
                 requireContext().prefs().edit {
                     putInt(C.SLEEP_TIMER_MINUTES, hours.value * 60 + minutes.value)
@@ -66,6 +68,7 @@ class SleepTimerDialog : DialogFragment() {
                 minutes.value = ((timeLeft - hours * 3600_000L) / 60_000L).toInt()
                 builder.setPositiveButton(getString(R.string.set), positiveListener)
                 builder.setNegativeButton(getString(R.string.stop)) { _, _ ->
+                    (parentFragment as? Media3PlayerFragment)?.onSleepTimerChanged(-1L, 0, 0, lockCheckbox.isChecked) ?:
                     (parentFragment as? PlayerFragment)?.onSleepTimerChanged(-1L, 0, 0, lockCheckbox.isChecked)
                     dismiss()
                 }

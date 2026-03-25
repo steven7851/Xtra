@@ -160,7 +160,6 @@
     <string name="chat_first">第一次聊天</string>
     <string name="chat_reward">忠诚点数兑换</string>
     <string name="always">总是</string>
-    <string name="twitch">Twitch</string>
     <string name="local">本地</string>
     <string name="days">日</string>
     <string name="seconds">秒</string>
@@ -458,11 +457,6 @@
     <string name="api_validate_tokens">在启动时验证令牌</string>
     <string name="followed_only">仅已关注</string>
     <string name="debug_api_commands">使用 API 聊天指令</string>
-    <string name="skip_video_access_token">跳过视频存取令牌</string>
-    <string name="skipVideoTokenEntries1">总是跳过</string>
-    <string name="skipVideoTokenEntries2">默认为跳过，如果播放失败则不跳过</string>
-    <string name="skipVideoTokenEntries3">默认为不跳过，如果播放失败则跳过</string>
-    <string name="skipVideoTokenEntries4">永不跳过</string>
     <string name="stream_live">%s 目前直播</string>
     <string name="stream_offline">%s 目前离线</string>
     <string name="keep_screen_on_when_paused">当视频已暂停时维持画面开启</string>
@@ -730,4 +724,5 @@
     <string name="copy_code">Copy code</string>
     <string name="external_tv_login_message">To get access to all features, you need to login as an Android TV device.\n\nFollow these steps:\n• Copy the code shown on the screen.\n• Press the \"Open URL\" button.\n• Enter the code and press \"Activate\".\n• Press \"Authorize\".\n• Return to Xtra and press \"Next\".</string>
     <string name="activate_notifications_when_following">Activate notifications when following</string>
+    <string name="account">Account</string>
 </resources>

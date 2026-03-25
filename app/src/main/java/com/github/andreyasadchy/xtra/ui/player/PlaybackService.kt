@@ -12,7 +12,6 @@ import android.os.ext.SdkExtensions
 import androidx.annotation.OptIn
 import androidx.core.content.edit
 import androidx.core.net.toUri
-import androidx.core.os.bundleOf
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
@@ -27,20 +26,15 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsManifest
 import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsPlaylist
-import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParserFactory
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
-import androidx.media3.exoplayer.upstream.ParsingLoadable
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.github.andreyasadchy.xtra.model.VideoPosition
+import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
-import com.github.andreyasadchy.xtra.player.lowlatency.HlsPlaylistParser
 import com.github.andreyasadchy.xtra.player.lowlatency.HttpEngineDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.OkHttpDataSource
 import com.github.andreyasadchy.xtra.repository.OfflineRepository
@@ -243,7 +237,7 @@ class PlaybackService : MediaSessionService() {
                                         proxySelector(
                                             object : ProxySelector() {
                                                 override fun select(u: URI): List<Proxy> {
-                                                    return if (Regex(MULTIVARIANT_PLAYLIST_REGEX).matches(u.host)) {
+                                                    return if (Regex(ExoPlayerService.MULTIVARIANT_PLAYLIST_REGEX).matches(u.host)) {
                                                         listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
                                                     } else {
                                                         listOf(Proxy.NO_PROXY)
@@ -267,7 +261,7 @@ class PlaybackService : MediaSessionService() {
                                         proxySelector(
                                             object : ProxySelector() {
                                                 override fun select(u: URI): List<Proxy> {
-                                                    return if (Regex(MEDIA_PLAYLIST_REGEX).matches(u.host)) {
+                                                    return if (Regex(ExoPlayerService.MEDIA_PLAYLIST_REGEX).matches(u.host)) {
                                                         listOf(Proxy(Proxy.Type.HTTP, InetSocketAddress(proxyHost, proxyPort)), Proxy.NO_PROXY)
                                                     } else {
                                                         listOf(Proxy.NO_PROXY)
@@ -319,7 +313,7 @@ class PlaybackService : MediaSessionService() {
                                             }
                                         )
                                     ).apply {
-                                        setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
+                                        setPlaylistParserFactory(ExoPlayerService.CustomHlsPlaylistParserFactory())
                                         setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(6))
                                     }.createMediaSource(
                                         MediaItem.Builder().apply {
@@ -377,7 +371,7 @@ class PlaybackService : MediaSessionService() {
                                             }
                                         )
                                     ).apply {
-                                        setPlaylistParserFactory(CustomHlsPlaylistParserFactory())
+                                        setPlaylistParserFactory(ExoPlayerService.CustomHlsPlaylistParserFactory())
                                     }.createMediaSource(
                                         MediaItem.Builder().apply {
                                             setUri(uri?.toUri())
@@ -483,11 +477,11 @@ class PlaybackService : MediaSessionService() {
                                         dynamicsProcessing?.enabled = true
                                     }
                                 }
-                                val enabled = dynamicsProcessing?.enabled
-                                prefs().edit { putBoolean(C.PLAYER_AUDIO_COMPRESSOR, enabled == true) }
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to enabled
-                                )))
+                                val enabled = dynamicsProcessing?.enabled == true
+                                prefs().edit { putBoolean(C.PLAYER_AUDIO_COMPRESSOR, enabled) }
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putBoolean(RESULT, enabled)
+                                }))
                             }
                             TOGGLE_PROXY -> {
                                 proxyMediaPlaylist = customCommand.customExtras.getBoolean(USING_PROXY)
@@ -511,9 +505,9 @@ class PlaybackService : MediaSessionService() {
                                     }
                                     sleepTimerEndTime = System.currentTimeMillis() + duration
                                 }
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to endTime
-                                )))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putLong(RESULT, endTime)
+                                }))
                             }
                             CHECK_ADS -> {
                                 val playlist = (session.player.currentManifest as? HlsManifest)?.mediaPlaylist
@@ -528,52 +522,47 @@ class PlaybackService : MediaSessionService() {
                                                 endTime != null && (it.id.startsWith("stitched-ad-") ||
                                                         it.clientDefinedAttributes.find { it.name == "CLASS" }?.textValue == "twitch-stitched-ad" ||
                                                         it.clientDefinedAttributes.find { it.name.startsWith("X-TV-TWITCH-AD-") } != null)
-                                                        && (startTime <= segmentStartTime && segmentStartTime < endTime)
+                                                        && segmentStartTime in startTime..endTime
                                             } != null
-                                }
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to adSegment
-                                )))
+                                } == true
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putBoolean(RESULT, adSegment)
+                                }))
                             }
                             GET_QUALITIES -> {
                                 val playlist = (session.player.currentManifest as? HlsManifest)?.multivariantPlaylist
-                                val names = playlist?.variants?.mapNotNull { it.format.label }?.toTypedArray()
-                                if (!names.isNullOrEmpty()) {
-                                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                        NAMES to names,
-                                        CODECS to playlist.variants.map { it.format.codecs }.toTypedArray(),
-                                        URLS to playlist.variants.map { it.url.toString() }.toTypedArray(),
-                                    )))
-                                } else {
-                                    val variants = playlist?.variants?.mapNotNull { variant ->
-                                        playlist.videos.find { it.groupId == variant.videoGroupId }?.name?.let { variant to it }
-                                    }
-                                    Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                        NAMES to variants?.map { it.second }?.toTypedArray(),
-                                        CODECS to variants?.map { it.first.format.codecs }?.toTypedArray(),
-                                        URLS to variants?.map { it.first.url.toString() }?.toTypedArray(),
-                                    )))
+                                val list = playlist?.variants?.mapNotNull { variant ->
+                                    val name = variant.format.label?.takeIf { it.isNotBlank() }
+                                        ?: playlist.videos.find { it.groupId == variant.videoGroupId }?.name?.takeIf { it.isNotBlank() }
+                                    if (name != null) {
+                                        VideoQuality(name, variant.format.codecs, variant.url.toString())
+                                    } else null
                                 }
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putStringArray(NAMES, list?.map { it.name.toString() }?.toTypedArray())
+                                    putStringArray(CODECS, list?.map { it.codecs.toString() }?.toTypedArray())
+                                    putStringArray(URLS, list?.map { it.url.toString() }?.toTypedArray())
+                                }))
                             }
                             GET_DURATION -> {
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000)
-                                )))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putLong(RESULT, (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.durationUs?.div(1000) ?: 0)
+                                }))
                             }
                             GET_ERROR_CODE -> {
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to (session.player.playerError?.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode,
-                                )))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putInt(RESULT, (session.player.playerError?.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode ?: 0)
+                                }))
                             }
                             GET_MEDIA_PLAYLIST -> {
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.tags?.toTypedArray()
-                                )))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putStringArray(RESULT, (session.player.currentManifest as? HlsManifest)?.mediaPlaylist?.tags?.toTypedArray())
+                                }))
                             }
                             GET_MULTIVARIANT_PLAYLIST -> {
-                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, bundleOf(
-                                    RESULT to (session.player.currentManifest as? HlsManifest)?.multivariantPlaylist?.tags?.toTypedArray()
-                                )))
+                                Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply {
+                                    putStringArray(RESULT, (session.player.currentManifest as? HlsManifest)?.multivariantPlaylist?.tags?.toTypedArray())
+                                }))
                             }
                             else -> super.onCustomCommand(session, controller, customCommand, args)
                         }
@@ -664,16 +653,6 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    class CustomHlsPlaylistParserFactory(): HlsPlaylistParserFactory {
-        override fun createPlaylistParser(): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser()
-        }
-
-        override fun createPlaylistParser(multivariantPlaylist: HlsMultivariantPlaylist, previousMediaPlaylist: HlsMediaPlaylist?): ParsingLoadable.Parser<HlsPlaylist> {
-            return HlsPlaylistParser(multivariantPlaylist, previousMediaPlaylist)
-        }
-    }
-
     companion object {
         const val START_STREAM = "startStream"
         const val START_VIDEO = "startVideo"
@@ -701,9 +680,6 @@ class PlaybackService : MediaSessionService() {
         const val NAMES = "names"
         const val CODECS = "codecs"
         const val URLS = "urls"
-
-        const val MULTIVARIANT_PLAYLIST_REGEX = "^usher\\.ttvnw\\.net$"
-        const val MEDIA_PLAYLIST_REGEX = "^(?:[a-z0-9-]+\\.playlist\\.(?:live-video|ttvnw)\\.net|video-weaver\\.[a-z0-9-]+\\.hls\\.ttvnw\\.net)$"
 
         const val REQUEST_CODE_RESUME = 2
     }
