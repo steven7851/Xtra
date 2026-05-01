@@ -15,9 +15,8 @@ import com.github.andreyasadchy.xtra.model.VideoPosition
 import com.github.andreyasadchy.xtra.model.VideoQuality
 import com.github.andreyasadchy.xtra.model.ui.Bookmark
 import com.github.andreyasadchy.xtra.model.ui.Game
-import com.github.andreyasadchy.xtra.model.ui.LocalFollowChannel
+import com.github.andreyasadchy.xtra.model.ui.LocalChannelFollow
 import com.github.andreyasadchy.xtra.model.ui.Stream
-import com.github.andreyasadchy.xtra.model.ui.TranslateAllMessagesUser
 import com.github.andreyasadchy.xtra.model.ui.User
 import com.github.andreyasadchy.xtra.player.lowlatency.CronetDataSource
 import com.github.andreyasadchy.xtra.player.lowlatency.HttpEngineDataSource
@@ -25,22 +24,21 @@ import com.github.andreyasadchy.xtra.player.lowlatency.OkHttpDataSource
 import com.github.andreyasadchy.xtra.repository.BookmarksRepository
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
-import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
-import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
-import com.github.andreyasadchy.xtra.repository.OfflineRepository
+import com.github.andreyasadchy.xtra.repository.LocalChannelFollowsRepository
+import com.github.andreyasadchy.xtra.repository.NotificationsRepository
+import com.github.andreyasadchy.xtra.repository.OfflineVideosRepository
 import com.github.andreyasadchy.xtra.repository.PlayerRepository
-import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
-import com.github.andreyasadchy.xtra.repository.TranslateAllMessagesUsersRepository
 import com.github.andreyasadchy.xtra.util.C
-import com.github.andreyasadchy.xtra.util.HttpEngineUtils
+import com.github.andreyasadchy.xtra.util.NetworkUtils
+import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.getByteArrayCronetCallback
 import com.github.andreyasadchy.xtra.util.m3u8.PlaylistUtils
 import dagger.Lazy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
@@ -51,8 +49,6 @@ import okhttp3.Credentials
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.chromium.net.CronetEngine
-import org.chromium.net.apihelpers.RedirectHandlers
-import org.chromium.net.apihelpers.UrlRequestCallbacks
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -66,22 +62,20 @@ import javax.inject.Inject
 
 @HiltViewModel
 class Media3PlayerViewModel @Inject constructor(
-    private val graphQLRepository: GraphQLRepository,
-    private val helixRepository: HelixRepository,
-    private val localFollowsChannel: LocalFollowChannelRepository,
-    private val shownNotificationsRepository: ShownNotificationsRepository,
-    private val notificationUsersRepository: NotificationUsersRepository,
-    private val translateAllMessagesUsersRepository: TranslateAllMessagesUsersRepository,
     private val httpEngine: Lazy<HttpEngine>?,
     private val cronetEngine: Lazy<CronetEngine>?,
     private val cronetExecutor: ExecutorService,
     private val okHttpClient: OkHttpClient,
+    private val graphQLRepository: GraphQLRepository,
+    private val helixRepository: HelixRepository,
     private val playerRepository: PlayerRepository,
     private val bookmarksRepository: BookmarksRepository,
-    private val offlineRepository: OfflineRepository,
+    private val offlineVideosRepository: OfflineVideosRepository,
+    private val localChannelFollowsRepository: LocalChannelFollowsRepository,
+    private val notificationsRepository: NotificationsRepository,
 ) : ViewModel() {
 
-    val integrity = MutableStateFlow<String?>(null)
+    val integrity = MutableSharedFlow<String?>()
 
     val streamResult = MutableStateFlow<String?>(null)
     val stream = MutableStateFlow<Stream?>(null)
@@ -168,10 +162,10 @@ class Media3PlayerViewModel @Inject constructor(
             }.build()
         } else null
         return when {
-            networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+            networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                 HttpEngineDataSource.Factory(httpEngine.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient, useProxy)
             }
-            networkLibrary == "Cronet" && cronetEngine != null -> {
+            networkLibrary == C.CRONET && cronetEngine != null -> {
                 CronetDataSource.Factory(cronetEngine.get(), cronetExecutor, multivariantPlaylistProxyClient, mediaPlaylistProxyClient, useProxy)
             }
             else -> {
@@ -183,33 +177,24 @@ class Media3PlayerViewModel @Inject constructor(
     suspend fun checkPlaylist(networkLibrary: String?, url: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val playlist = when {
-                networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                     val response = suspendCancellableCoroutine { continuation ->
-                        httpEngine.get().newUrlRequestBuilder(url, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                        httpEngine.get().newUrlRequestBuilder(url, cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).build().start()
                     }
                     response.second.inputStream().use {
                         PlaylistUtils.parseMediaPlaylist(it)
                     }
                 }
-                networkLibrary == "Cronet" && cronetEngine != null -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                        cronetEngine.get().newUrlRequestBuilder(url, request.callback, cronetExecutor).build().start()
-                        val response = request.future.get().responseBody as ByteArray
-                        response.inputStream().use {
-                            PlaylistUtils.parseMediaPlaylist(it)
-                        }
-                    } else {
-                        val response = suspendCancellableCoroutine { continuation ->
-                            cronetEngine.get().newUrlRequestBuilder(url, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                        }
-                        response.second.inputStream().use {
-                            PlaylistUtils.parseMediaPlaylist(it)
-                        }
+                networkLibrary == C.CRONET && cronetEngine != null -> {
+                    val response = suspendCancellableCoroutine { continuation ->
+                        cronetEngine.get().newUrlRequestBuilder(url, NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).build().start()
+                    }
+                    response.second.inputStream().use {
+                        PlaylistUtils.parseMediaPlaylist(it)
                     }
                 }
                 else -> {
-                    okHttpClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    okHttpClient.newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
                         response.body.byteStream().use {
                             PlaylistUtils.parseMediaPlaylist(it)
                         }
@@ -241,9 +226,9 @@ class Media3PlayerViewModel @Inject constructor(
         try {
             val useProxy = !useCustomProxy && proxyMultivariantPlaylist && !proxyHost.isNullOrBlank() && proxyPort != null
             when {
-                networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null && !useProxy -> {
+                networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null && !useProxy -> {
                     val response = suspendCancellableCoroutine { continuation ->
-                        httpEngine.get().newUrlRequestBuilder(url, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                        httpEngine.get().newUrlRequestBuilder(url, cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).build().start()
                     }
                     if (response.first.httpStatusCode in 200..299) {
                         String(response.second) to null
@@ -251,25 +236,14 @@ class Media3PlayerViewModel @Inject constructor(
                         null to response.first.httpStatusCode
                     }
                 }
-                networkLibrary == "Cronet" && cronetEngine != null && !useProxy -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        val request = UrlRequestCallbacks.forStringBody(RedirectHandlers.alwaysFollow())
-                        cronetEngine.get().newUrlRequestBuilder(url, request.callback, cronetExecutor).build().start()
-                        val response = request.future.get()
-                        if (response.urlResponseInfo.httpStatusCode in 200..299) {
-                            (response.responseBody as String) to null
-                        } else {
-                            null to response.urlResponseInfo.httpStatusCode
-                        }
+                networkLibrary == C.CRONET && cronetEngine != null && !useProxy -> {
+                    val response = suspendCancellableCoroutine { continuation ->
+                        cronetEngine.get().newUrlRequestBuilder(url, NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).build().start()
+                    }
+                    if (response.first.httpStatusCode in 200..299) {
+                        String(response.second) to null
                     } else {
-                        val response = suspendCancellableCoroutine { continuation ->
-                            cronetEngine.get().newUrlRequestBuilder(url, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                        }
-                        if (response.first.httpStatusCode in 200..299) {
-                            String(response.second) to null
-                        } else {
-                            null to response.first.httpStatusCode
-                        }
+                        null to response.first.httpStatusCode
                     }
                 }
                 else -> {
@@ -282,7 +256,7 @@ class Media3PlayerViewModel @Inject constructor(
                                 }
                             }
                         }
-                    }.build().newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    }.build().newCall(Request.Builder().url(url).build()).executeAsync().use { response ->
                         if (response.isSuccessful) {
                             response.body.string() to null
                         } else {
@@ -302,8 +276,8 @@ class Media3PlayerViewModel @Inject constructor(
                 try {
                     streamResult.value = playerRepository.loadStreamPlaylistUrl(networkLibrary, gqlHeaders, channelLogin, randomDeviceId, xDeviceId, playerType, supportedCodecs, proxyPlaybackAccessToken, proxyHost, proxyPort, proxyUser, proxyPassword, enableIntegrity)
                 } catch (e: Exception) {
-                    if (e.message == "failed integrity check" && integrity.value == null) {
-                        integrity.value = "refreshStream"
+                    if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                        integrity.emit("refreshStream")
                     }
                 }
             }
@@ -319,8 +293,8 @@ class Media3PlayerViewModel @Inject constructor(
                         updateStreamInfo(channelId, channelLogin, networkLibrary, helixHeaders, gqlHeaders, enableIntegrity)
                         delay(300000L)
                     } catch (e: Exception) {
-                        if (e.message == "failed integrity check" && integrity.value == null) {
-                            integrity.value = "stream"
+                        if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                            integrity.emit("stream")
                         }
                         delay(60000L)
                     }
@@ -332,8 +306,8 @@ class Media3PlayerViewModel @Inject constructor(
                     try {
                         updateStreamInfo(channelId, channelLogin, networkLibrary, helixHeaders, gqlHeaders, enableIntegrity)
                     } catch (e: Exception) {
-                        if (e.message == "failed integrity check" && integrity.value == null) {
-                            integrity.value = "stream"
+                        if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                            integrity.emit("stream")
                         }
                     }
                 }
@@ -350,7 +324,7 @@ class Media3PlayerViewModel @Inject constructor(
                 logins = if (channelId.isNullOrBlank()) channelLogin?.let { listOf(it) } else null,
             )
             if (enableIntegrity) {
-                response.errors?.find { it.message == "failed integrity check" }?.let { throw Exception(it.message) }
+                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { throw Exception(it.message) }
             }
             response.data!!.users?.firstOrNull()?.let {
                 Stream(
@@ -370,7 +344,7 @@ class Media3PlayerViewModel @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-            if (e.message == "failed integrity check") throw e
+            if (e.message == C.FAILED_INTEGRITY_CHECK) throw e
             if (helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) throw Exception()
             try {
                 helixRepository.getStreams(
@@ -396,7 +370,7 @@ class Media3PlayerViewModel @Inject constructor(
             } catch (e: Exception) {
                 val response = graphQLRepository.loadViewerCount(networkLibrary, gqlHeaders, channelLogin)
                 if (enableIntegrity) {
-                    response.errors?.find { it.message == "failed integrity check" }?.let { throw Exception(it.message) }
+                    response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { throw Exception(it.message) }
                 }
                 response.data!!.user.stream?.let {
                     Stream(
@@ -416,8 +390,8 @@ class Media3PlayerViewModel @Inject constructor(
                     videoResult.value = result.first
                     backupQualities = result.second
                 } catch (e: Exception) {
-                    if (e.message == "failed integrity check" && integrity.value == null) {
-                        integrity.value = "refreshVideo"
+                    if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                        integrity.emit("refreshVideo")
                     }
                 }
             }
@@ -446,26 +420,47 @@ class Media3PlayerViewModel @Inject constructor(
         if (gamesList.value == null) {
             viewModelScope.launch {
                 try {
-                    val response = graphQLRepository.loadVideoGames(networkLibrary, gqlHeaders, videoId)
-                    if (enableIntegrity && integrity.value == null) {
-                        response.errors?.find { it.message == "failed integrity check" }?.let {
-                            integrity.value = "refreshVideo"
+                    val response = graphQLRepository.loadQueryVideoMoments(networkLibrary, gqlHeaders, videoId)
+                    if (enableIntegrity) {
+                        response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                            integrity.emit("refreshVideo")
                             return@launch
                         }
                     }
-                    gamesList.value = response.data!!.video.moments.edges.map { item ->
-                        item.node.let {
+                    gamesList.value = response.data!!.video!!.moments!!.edges!!.map { item ->
+                        item.node!!.let {
                             Game(
-                                id = it.details?.game?.id,
-                                name = it.details?.game?.displayName,
-                                boxArtURL = it.details?.game?.boxArtURL,
+                                id = it.details?.onGameChangeMomentDetails?.game?.id,
+                                name = it.details?.onGameChangeMomentDetails?.game?.displayName,
+                                boxArtURL = it.details?.onGameChangeMomentDetails?.game?.boxArtURL,
                                 vodPosition = it.positionMilliseconds,
                                 vodDuration = it.durationMilliseconds,
                             )
                         }
                     }
                 } catch (e: Exception) {
+                    try {
+                        val response = graphQLRepository.loadVideoGames(networkLibrary, gqlHeaders, videoId)
+                        if (enableIntegrity) {
+                            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                integrity.emit("refreshVideo")
+                                return@launch
+                            }
+                        }
+                        gamesList.value = response.data!!.video.moments.edges.map { item ->
+                            item.node.let {
+                                Game(
+                                    id = it.details?.game?.id,
+                                    name = it.details?.game?.displayName,
+                                    boxArtURL = it.details?.game?.boxArtURL,
+                                    vodPosition = it.positionMilliseconds,
+                                    vodDuration = it.durationMilliseconds,
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
 
+                    }
                 }
             }
         }
@@ -473,15 +468,15 @@ class Media3PlayerViewModel @Inject constructor(
 
     fun checkBookmark(id: String) {
         viewModelScope.launch {
-            isBookmarked.value = bookmarksRepository.getBookmarkByVideoId(id) != null
+            isBookmarked.value = bookmarksRepository.getByVideoId(id) != null
         }
     }
 
     fun saveBookmark(filesDir: String, networkLibrary: String?, helixHeaders: Map<String, String>, gqlHeaders: Map<String, String>, videoId: String?, title: String?, uploadDate: String?, durationSeconds: Int?, type: String?, animatedPreviewUrl: String?, channelId: String?, channelLogin: String?, channelName: String?, channelImage: String?, thumbnail: String?, gameId: String?, gameSlug: String?, gameName: String?) {
         viewModelScope.launch {
-            val item = videoId?.let { bookmarksRepository.getBookmarkByVideoId(it) }
+            val item = videoId?.let { bookmarksRepository.getByVideoId(it) }
             if (item != null) {
-                bookmarksRepository.deleteBookmark(item)
+                bookmarksRepository.delete(item)
             } else {
                 val downloadedThumbnail = videoId.takeIf { !it.isNullOrBlank() }?.let { id ->
                     thumbnail.takeIf { !it.isNullOrBlank() }?.let {
@@ -490,9 +485,9 @@ class Media3PlayerViewModel @Inject constructor(
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 when {
-                                    networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                                    networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                                         val response = suspendCancellableCoroutine { continuation ->
-                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
                                             FileOutputStream(path).use {
@@ -500,29 +495,18 @@ class Media3PlayerViewModel @Inject constructor(
                                             }
                                         }
                                     }
-                                    networkLibrary == "Cronet" && cronetEngine != null -> {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                            val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                                            cronetEngine.get().newUrlRequestBuilder(it, request.callback, cronetExecutor).build().start()
-                                            val response = request.future.get()
-                                            if (response.urlResponseInfo.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.responseBody as ByteArray)
-                                                }
-                                            }
-                                        } else {
-                                            val response = suspendCancellableCoroutine { continuation ->
-                                                cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                                            }
-                                            if (response.first.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.second)
-                                                }
+                                    networkLibrary == C.CRONET && cronetEngine != null -> {
+                                        val response = suspendCancellableCoroutine { continuation ->
+                                            cronetEngine.get().newUrlRequestBuilder(it, NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).build().start()
+                                        }
+                                        if (response.first.httpStatusCode in 200..299) {
+                                            FileOutputStream(path).use {
+                                                it.write(response.second)
                                             }
                                         }
                                     }
                                     else -> {
-                                        okHttpClient.newCall(Request.Builder().url(it).build()).execute().use { response ->
+                                        okHttpClient.newCall(Request.Builder().url(it).build()).executeAsync().use { response ->
                                             if (response.isSuccessful) {
                                                 FileOutputStream(path).use { outputStream ->
                                                     response.body.byteStream().use { inputStream ->
@@ -547,9 +531,9 @@ class Media3PlayerViewModel @Inject constructor(
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 when {
-                                    networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                                    networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                                         val response = suspendCancellableCoroutine { continuation ->
-                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
                                             FileOutputStream(path).use {
@@ -557,29 +541,18 @@ class Media3PlayerViewModel @Inject constructor(
                                             }
                                         }
                                     }
-                                    networkLibrary == "Cronet" && cronetEngine != null -> {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                            val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                                            cronetEngine.get().newUrlRequestBuilder(it, request.callback, cronetExecutor).build().start()
-                                            val response = request.future.get()
-                                            if (response.urlResponseInfo.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.responseBody as ByteArray)
-                                                }
-                                            }
-                                        } else {
-                                            val response = suspendCancellableCoroutine { continuation ->
-                                                cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                                            }
-                                            if (response.first.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.second)
-                                                }
+                                    networkLibrary == C.CRONET && cronetEngine != null -> {
+                                        val response = suspendCancellableCoroutine { continuation ->
+                                            cronetEngine.get().newUrlRequestBuilder(it, NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).build().start()
+                                        }
+                                        if (response.first.httpStatusCode in 200..299) {
+                                            FileOutputStream(path).use {
+                                                it.write(response.second)
                                             }
                                         }
                                     }
                                     else -> {
-                                        okHttpClient.newCall(Request.Builder().url(it).build()).execute().use { response ->
+                                        okHttpClient.newCall(Request.Builder().url(it).build()).executeAsync().use { response ->
                                             if (response.isSuccessful) {
                                                 FileOutputStream(path).use { outputStream ->
                                                     response.body.byteStream().use { inputStream ->
@@ -638,7 +611,7 @@ class Media3PlayerViewModel @Inject constructor(
                         } else null
                     }
                 }
-                bookmarksRepository.saveBookmark(
+                bookmarksRepository.save(
                     Bookmark(
                         videoId = videoId,
                         userId = channelId,
@@ -668,8 +641,8 @@ class Media3PlayerViewModel @Inject constructor(
                 try {
                     clipUrls.value = playerRepository.loadClipQualities(networkLibrary, gqlHeaders, id, enableIntegrity) ?: emptyList()
                 } catch (e: Exception) {
-                    if (e.message == "failed integrity check" && integrity.value == null) {
-                        integrity.value = "refreshClip"
+                    if (e.message == C.FAILED_INTEGRITY_CHECK) {
+                        integrity.emit("refreshClip")
                     } else {
                         clipUrls.value = emptyList()
                     }
@@ -680,14 +653,14 @@ class Media3PlayerViewModel @Inject constructor(
 
     fun getOfflineVideoPosition(id: Int) {
         viewModelScope.launch {
-            savedOfflineVideoPosition.value = offlineRepository.getVideoById(id)?.lastWatchPosition ?: 0
+            savedOfflineVideoPosition.value = offlineVideosRepository.getById(id)?.lastWatchPosition ?: 0
         }
     }
 
     fun saveOfflineVideoPosition(id: Int, position: Long) {
         if (loaded.value) {
             viewModelScope.launch {
-                offlineRepository.updateVideoPosition(id, position)
+                offlineVideosRepository.updatePosition(id, position)
             }
         }
     }
@@ -717,7 +690,7 @@ class Media3PlayerViewModel @Inject constructor(
                                 _isFollowing.value = following
                             }
                         } else {
-                            _isFollowing.value = localFollowsChannel.getFollowByUserId(channelId) != null
+                            _isFollowing.value = localChannelFollowsRepository.getById(channelId) != null
                         }
                     }
                 } catch (e: Exception) {
@@ -733,9 +706,9 @@ class Media3PlayerViewModel @Inject constructor(
                 if (!channelId.isNullOrBlank()) {
                     if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
                         val errorMessage = graphQLRepository.loadFollowUser(networkLibrary, gqlHeaders, channelId, disableNotifications).also { response ->
-                            if (enableIntegrity && integrity.value == null) {
-                                response.errors?.find { it.message == "failed integrity check" }?.let {
-                                    integrity.value = "follow"
+                            if (enableIntegrity) {
+                                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                    integrity.emit("follow")
                                     return@launch
                                 }
                             }
@@ -747,20 +720,20 @@ class Media3PlayerViewModel @Inject constructor(
                             follow.value = Pair(true, null)
                             if (liveNotificationsEnabled) {
                                 startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                                    shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                                    notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
                             }
                         }
                     } else {
-                        localFollowsChannel.saveFollow(LocalFollowChannel(channelId, channelLogin, channelName))
+                        localChannelFollowsRepository.save(LocalChannelFollow(channelId, channelLogin, channelName))
                         _isFollowing.value = true
                         follow.value = Pair(true, null)
                         if (!disableNotifications) {
-                            notificationUsersRepository.saveUser(NotificationUser(channelId))
+                            notificationsRepository.saveUser(NotificationUser(channelId))
                         }
                         if (liveNotificationsEnabled) {
                             startedAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                                shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                                notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
                     }
@@ -777,9 +750,9 @@ class Media3PlayerViewModel @Inject constructor(
                 if (!channelId.isNullOrBlank()) {
                     if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
                         val errorMessage = graphQLRepository.loadUnfollowUser(networkLibrary, gqlHeaders, channelId).also { response ->
-                            if (enableIntegrity && integrity.value == null) {
-                                response.errors?.find { it.message == "failed integrity check" }?.let {
-                                    integrity.value = "unfollow"
+                            if (enableIntegrity) {
+                                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                    integrity.emit("unfollow")
                                     return@launch
                                 }
                             }
@@ -791,27 +764,15 @@ class Media3PlayerViewModel @Inject constructor(
                             follow.value = Pair(false, null)
                         }
                     } else {
-                        localFollowsChannel.getFollowByUserId(channelId)?.let { localFollowsChannel.deleteFollow(it) }
+                        localChannelFollowsRepository.getById(channelId)?.let { localChannelFollowsRepository.delete(it) }
                         _isFollowing.value = false
                         follow.value = Pair(false, null)
-                        notificationUsersRepository.deleteUser(NotificationUser(channelId))
+                        notificationsRepository.deleteUser(NotificationUser(channelId))
                     }
                 }
             } catch (e: Exception) {
 
             }
-        }
-    }
-
-    fun saveTranslateAllMessagesUser(channelId: String) {
-        viewModelScope.launch {
-            translateAllMessagesUsersRepository.saveUser(TranslateAllMessagesUser(channelId))
-        }
-    }
-
-    fun deleteTranslateAllMessagesUser(channelId: String) {
-        viewModelScope.launch {
-            translateAllMessagesUsersRepository.deleteUser(TranslateAllMessagesUser(channelId))
         }
     }
 }

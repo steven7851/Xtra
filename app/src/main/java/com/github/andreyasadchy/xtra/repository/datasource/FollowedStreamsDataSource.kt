@@ -5,18 +5,17 @@ import androidx.paging.PagingState
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
-import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
+import com.github.andreyasadchy.xtra.repository.LocalChannelFollowsRepository
 import com.github.andreyasadchy.xtra.util.C
 
 class FollowedStreamsDataSource(
     private val userId: String?,
-    private val localFollowsChannel: LocalFollowChannelRepository,
+    private val localChannelFollowsRepository: LocalChannelFollowsRepository,
     private val gqlHeaders: Map<String, String>,
     private val graphQLRepository: GraphQLRepository,
     private val helixHeaders: Map<String, String>,
     private val helixRepository: HelixRepository,
     private val enableIntegrity: Boolean,
-    private val apiPref: List<String>,
     private val networkLibrary: String?,
 ) : PagingSource<Int, Stream>() {
     private var api: String? = null
@@ -25,13 +24,13 @@ class FollowedStreamsDataSource(
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Stream> {
         return if (!offset.isNullOrBlank()) {
             try {
-                loadFromApi(api, params)
+                loadFromApi(params)
             } catch (e: Exception) {
                 LoadResult.Error(e)
             }
         } else {
             val list = mutableListOf<Stream>()
-            localFollowsChannel.loadFollows().mapNotNull { it.userId }.takeIf { it.isNotEmpty() }?.let {
+            localChannelFollowsRepository.getAll().mapNotNull { it.userId }.takeIf { it.isNotEmpty() }?.let {
                 try {
                     gqlQueryLocal(it)
                 } catch (e: Exception) {
@@ -42,26 +41,29 @@ class FollowedStreamsDataSource(
                     }
                 }
             }?.let {
-                if (it is LoadResult.Error && it.throwable.message == "failed integrity check") {
+                if (it is LoadResult.Error && it.throwable.message == C.FAILED_INTEGRITY_CHECK) {
                     return it
                 }
                 (it as? LoadResult.Page)?.data?.let { list.addAll(it) }
             }
             val result = if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() || !helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) {
                 try {
-                    loadFromApi(apiPref.getOrNull(0), params)
+                    api = C.GQL
+                    loadFromApi(params)
                 } catch (e: Exception) {
                     try {
-                        loadFromApi(apiPref.getOrNull(1), params)
+                        api = C.GQL_PERSISTED_QUERY
+                        loadFromApi(params)
                     } catch (e: Exception) {
                         try {
-                            loadFromApi(apiPref.getOrNull(2), params)
+                            api = C.HELIX
+                            loadFromApi(params)
                         } catch (e: Exception) {
                             null
                         }
                     }
                 }?.let {
-                    if (it is LoadResult.Error && it.throwable.message == "failed integrity check") {
+                    if (it is LoadResult.Error && it.throwable.message == C.FAILED_INTEGRITY_CHECK) {
                         return it
                     }
                     it as? LoadResult.Page
@@ -82,9 +84,8 @@ class FollowedStreamsDataSource(
         }
     }
 
-    private suspend fun loadFromApi(apiPref: String?, params: LoadParams<Int>): LoadResult<Int, Stream> {
-        api = apiPref
-        return when (apiPref) {
+    private suspend fun loadFromApi(params: LoadParams<Int>): LoadResult<Int, Stream> {
+        return when (api) {
             C.GQL -> if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) gqlQueryLoad(params) else throw Exception()
             C.GQL_PERSISTED_QUERY -> if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) gqlLoad(params) else throw Exception()
             C.HELIX -> if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank()) helixLoad(params) else throw Exception()
@@ -95,7 +96,7 @@ class FollowedStreamsDataSource(
     private suspend fun gqlQueryLoad(params: LoadParams<Int>): LoadResult<Int, Stream> {
         val response = graphQLRepository.loadQueryUserFollowedStreams(networkLibrary, gqlHeaders, 100, offset)
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.user!!.followedLiveUsers!!
         val items = data.edges!!
@@ -132,7 +133,7 @@ class FollowedStreamsDataSource(
     private suspend fun gqlLoad(params: LoadParams<Int>): LoadResult<Int, Stream> {
         val response = graphQLRepository.loadFollowedStreams(networkLibrary, gqlHeaders, 100, offset)
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.currentUser.followedLiveUsers
         val items = data.edges
@@ -213,7 +214,7 @@ class FollowedStreamsDataSource(
         val items = ids.chunked(100).map { list ->
             graphQLRepository.loadQueryUsersStream(networkLibrary, gqlHeaders, list).also { response ->
                 if (enableIntegrity) {
-                    response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+                    response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
                 }
             }
         }.flatMap { it.data!!.users!! }

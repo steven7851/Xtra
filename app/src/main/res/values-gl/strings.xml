@@ -26,7 +26,7 @@
     <string name="chat_only">Só chat</string>
     <string name="select_quality">Seleccionar calidade</string>
     <string name="download">Descargar</string>
-    <string name="downloading">Descargando...</string>
+    <string name="downloading">Descargando…</string>
     <string name="downloaded">Descarga completada</string>
     <string name="uploaded_date">Subido %s</string>
     <string name="downloaded_date">Descargado %s</string>
@@ -77,7 +77,7 @@
     <string name="search">Buscar</string>
     <string name="chat_replay_unavailable">A repetición do chat non está dispoñible</string>
     <string name="video_subscribers_only">Este vídeo só está dispoñible para subscritores.</string>
-    <string name="player_error">Erro do reprodutor, reintentando...</string>
+    <string name="player_error">Erro do reprodutor, reintentando…</string>
     <string name="picture_in_picture">Imaxe dentro de imaxe</string>
     <string name="source_vod_start">Inicio: %s</string>
     <string name="source_vod_end">Fin: %s</string>
@@ -180,7 +180,7 @@
     <string name="recentMsg_limit">Límite de mensaxes recentes</string>
     <string name="last_broadcast_date">Última transmisión %s</string>
     <string name="followed_at">Seguido o %s</string>
-    <string name="show_usernotice">Mostrar avisos de usuario (subs, raids...)</string>
+    <string name="show_usernotice">Mostrar avisos de usuario (subs, raids)</string>
     <string name="show_clearmsg">Mostrar eliminacións de mensaxes individuais</string>
     <string name="show_clearchat">Mostrar tempos de espera e expulsións</string>
     <string name="copy_fullmsg">Copiar mensaxe completa</string>
@@ -371,19 +371,7 @@
     <string name="api_login">Obter token para as APIs seleccionadas</string>
     <string name="api_helix_redirect">URL de redirección Helix</string>
     <string name="api_gql_redirect">URL de redirección GQL</string>
-    <string name="api_settings">Axustes da API</string>
     <string name="streams">Transmisións</string>
-    <string name="game_streams">Transmisións do xogo</string>
-    <string name="game_videos">Vídeos do xogo</string>
-    <string name="game_clips">Clips do xogo</string>
-    <string name="channel_videos">Vídeos da canle</string>
-    <string name="channel_clips">Clips da canle</string>
-    <string name="search_channels">Buscar canles</string>
-    <string name="search_games">Buscar xogos</string>
-    <string name="followed_streams">Transmisións seguidas</string>
-    <string name="followed_videos">Vídeos seguidos</string>
-    <string name="followed_channels">Canles seguidas</string>
-    <string name="followed_games">Xogos seguidos</string>
     <string name="irc_msgid_highlighted_message">Mensaxe destacada</string>
     <string name="irc_msgid_announcement">Anuncio</string>
     <string name="add_bookmark">Engadir marcador</string>
@@ -439,7 +427,6 @@
     <string name="save_default">Gardar como predeterminado</string>
     <string name="viewers_high">Espectadores (descendente)</string>
     <string name="viewers_low">Espectadores (ascendente)</string>
-    <string name="search_videos">Buscar vídeos</string>
     <string name="points_earned">Recibiches %d puntos da canle</string>
     <string name="points_notify">Notificar ao gañar puntos da canle</string>
     <string name="points_collect">Recoller automaticamente os puntos da canle</string>
@@ -447,7 +434,6 @@
     <string name="raid_text">Asaltando %1$s con %2$d espectadores</string>
     <string name="show_raids">Amosar raids</string>
     <string name="auto_switch_raids">Cambiar automaticamente de transmisión nun raid</string>
-    <string name="search_streams">Buscar transmisións</string>
     <string name="reload_emotes">Recargar emoticonas</string>
     <string name="api_current_login">Inicio de sesión actual</string>
     <string name="api_user_id">ID da conta</string>
@@ -595,9 +581,6 @@
     <string name="channel_follower_emote">Emoticona de seguidor de %s</string>
     <string name="bits_reward_emote">Recompensa de %d bits</string>
     <string name="show_name_paints">Amosar estilos de nome 7TV</string>
-    <string name="api_helix">Helix</string>
-    <string name="api_gql">GQL</string>
-    <string name="api_gql_persisted_query">Consulta persistente GQL</string>
     <string name="show_stv_badges">Amosar insignias 7TV</string>
     <string name="show_stv_personal_emotes">Amosar emoticonas persoais 7TV</string>
     <string name="stv_live_updates">Actualizacións en directo de emoticonas 7TV</string>
@@ -682,7 +665,7 @@
     <string name="sort_and_type">Ordenar por: %1$s. Tipo: %2$s</string>
     <string name="search_tags">Buscar etiquetas</string>
     <string name="invalid_directory">Directorio non válido</string>
-    <string name="suggested">Suxerido</string>
+    <string name="suggestions">Suxerido</string>
     <string name="languages">Idiomas</string>
     <string name="recent">Comezados recentemente</string>
     <string name="filters">Filtros</string>
@@ -720,9 +703,11 @@
     <string name="tv_login_message">Para acceder a todas as funcións, necesitas iniciar sesión como dispositivo Android TV.\n\nSegue estes pasos:\n• Copia o código mostrado na páxina web.\n• Preme o botón \"Seguinte\" na parte inferior.\n• Introduce o código e preme \"Activar\".\n• Preme \"Autorizar\".</string>
     <string name="open_url">Abrir URL</string>
     <string name="external_login_message">Podes iniciar sesión usando un navegador externo.\n\nSegue estes pasos:\n• Preme \"Abrir URL\" para abrir a páxina de inicio de sesión.\n• Inicia sesión na túa conta e preme \"Autorizar\".\n• Debería aparecer unha páxina con erro. Copia a URL desa páxina, pégaa na caixa de abaixo e preme \"OK\".</string>
-    <string name="loading">Cargando...</string>
+    <string name="loading">Cargando…</string>
     <string name="copy_code">Copiar código</string>
     <string name="external_tv_login_message">Para acceder a todas as funcións, necesitas iniciar sesión como dispositivo Android TV.\n\nSegue estes pasos:\n• Copia o código mostrado na pantalla.\n• Preme o botón \"Abrir URL\".\n• Introduce o código e preme \"Activar\".\n• Preme \"Autorizar\".\n• Volve a Xtra e preme \"Seguinte\".</string>
     <string name="activate_notifications_when_following">Activate notifications when following</string>
     <string name="account">Account</string>
+    <string name="downloading_update_progress">Downloading update… %1$s / %2$s</string>
+    <string name="downloading_update">Downloading update…</string>
 </resources>	

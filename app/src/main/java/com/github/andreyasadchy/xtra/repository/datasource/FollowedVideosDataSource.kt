@@ -14,7 +14,6 @@ class FollowedVideosDataSource(
     private val gqlHeaders: Map<String, String>,
     private val graphQLRepository: GraphQLRepository,
     private val enableIntegrity: Boolean,
-    private val apiPref: List<String>,
     private val networkLibrary: String?,
 ) : PagingSource<Int, Video>() {
     private var api: String? = null
@@ -23,16 +22,18 @@ class FollowedVideosDataSource(
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Video> {
         return if (!offset.isNullOrBlank()) {
             try {
-                loadFromApi(api, params)
+                loadFromApi(params)
             } catch (e: Exception) {
                 LoadResult.Error(e)
             }
         } else {
             try {
-                loadFromApi(apiPref.getOrNull(0), params)
+                api = C.GQL
+                loadFromApi(params)
             } catch (e: Exception) {
                 try {
-                    loadFromApi(apiPref.getOrNull(1), params)
+                    api = C.GQL_PERSISTED_QUERY
+                    loadFromApi(params)
                 } catch (e: Exception) {
                     LoadResult.Error(e)
                 }
@@ -40,9 +41,8 @@ class FollowedVideosDataSource(
         }
     }
 
-    private suspend fun loadFromApi(apiPref: String?, params: LoadParams<Int>): LoadResult<Int, Video> {
-        api = apiPref
-        return when (apiPref) {
+    private suspend fun loadFromApi(params: LoadParams<Int>): LoadResult<Int, Video> {
+        return when (api) {
             C.GQL -> if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank()) gqlQueryLoad(params) else throw Exception()
             C.GQL_PERSISTED_QUERY -> if (!gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && gqlQueryType == BroadcastType.ARCHIVE && gqlQuerySort == VideoSort.TIME) gqlLoad(params) else throw Exception()
             else -> throw Exception()
@@ -52,7 +52,7 @@ class FollowedVideosDataSource(
     private suspend fun gqlQueryLoad(params: LoadParams<Int>): LoadResult<Int, Video> {
         val response = graphQLRepository.loadQueryUserFollowedVideos(networkLibrary, gqlHeaders, gqlQuerySort, gqlQueryType?.let { listOf(it) }, params.loadSize, offset)
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.user!!.followedVideos!!
         val items = data.edges!!
@@ -91,7 +91,7 @@ class FollowedVideosDataSource(
     private suspend fun gqlLoad(params: LoadParams<Int>): LoadResult<Int, Video> {
         val response = graphQLRepository.loadFollowedVideos(networkLibrary, gqlHeaders, params.loadSize, offset)
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.currentUser.followedVideos
         val items = data.edges

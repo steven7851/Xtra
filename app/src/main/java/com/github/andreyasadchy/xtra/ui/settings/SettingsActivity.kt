@@ -12,22 +12,21 @@ import android.os.Build
 import android.os.Bundle
 import android.os.ext.SdkExtensions
 import android.provider.Settings
+import android.text.format.Formatter
 import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SearchView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
-import androidx.core.content.res.use
 import androidx.core.net.toUri
 import androidx.core.os.LocaleListCompat
 import androidx.core.view.ViewCompat
@@ -35,8 +34,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import androidx.core.widget.NestedScrollView
-import androidx.core.widget.TextViewCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -61,6 +58,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.andreyasadchy.xtra.R
 import com.github.andreyasadchy.xtra.SettingsNavGraphDirections
 import com.github.andreyasadchy.xtra.databinding.ActivitySettingsBinding
+import com.github.andreyasadchy.xtra.databinding.DialogUpdateDownloadBinding
 import com.github.andreyasadchy.xtra.model.ui.SettingsDragListItem
 import com.github.andreyasadchy.xtra.model.ui.SettingsSearchItem
 import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
@@ -253,6 +251,8 @@ class SettingsActivity : AppCompatActivity() {
         private val viewModel: SettingsViewModel by activityViewModels()
         private var backupResultLauncher: ActivityResultLauncher<Intent>? = null
         private var restoreResultLauncher: ActivityResultLauncher<Intent>? = null
+        private var updateDownloadDialogBinding: DialogUpdateDownloadBinding? = null
+        private var updateDownloadDialog: AlertDialog? = null
 
         override fun onCreate(savedInstanceState: Bundle?) {
             super.onCreate(savedInstanceState)
@@ -278,7 +278,7 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     viewModel.restoreSettings(
                         list = list,
-                        networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                        networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                         gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext(), true),
                         helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext())
                     )
@@ -344,7 +344,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
                 viewModel.toggleNotifications(
                     enabled = newValue as Boolean,
-                    networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                    networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext(), true),
                     helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext())
                 )
@@ -405,7 +405,7 @@ class SettingsActivity : AppCompatActivity() {
             }
             findPreference<Preference>("check_updates")?.setOnPreferenceClickListener {
                 viewModel.checkUpdates(
-                    requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                     requireContext().prefs().getString(C.UPDATE_URL, null) ?: "https://api.github.com/repos/crackededed/xtra/releases/tags/latest",
                     requireContext().tokenPrefs().getLong(C.UPDATE_LAST_CHECKED, 0)
                 )
@@ -497,7 +497,30 @@ class SettingsActivity : AppCompatActivity() {
                                             Toast.makeText(requireContext(), R.string.no_browser_found, Toast.LENGTH_LONG).show()
                                         }
                                     } else {
-                                        viewModel.downloadUpdate(requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"), it)
+                                        val binding = DialogUpdateDownloadBinding.inflate(layoutInflater)
+                                        updateDownloadDialogBinding = binding
+                                        val size = viewModel.updateSize
+                                        if (size != null) {
+                                            binding.textView.text = getString(
+                                                R.string.downloading_update_progress,
+                                                Formatter.formatFileSize(requireContext(), 0),
+                                                Formatter.formatFileSize(requireContext(), size),
+                                            )
+                                        } else {
+                                            binding.textView.text = getString(R.string.downloading_update)
+                                            binding.progressBar.visibility = View.GONE
+                                        }
+                                        viewModel.downloadUpdate(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), it)
+                                        val dialog = requireActivity().getAlertDialogBuilder()
+                                            .setView(binding.root)
+                                            .setNegativeButton(getString(android.R.string.cancel), null)
+                                            .setOnDismissListener {
+                                                viewModel.updateJob?.cancel()
+                                                updateDownloadDialogBinding = null
+                                                updateDownloadDialog = null
+                                            }
+                                            .show()
+                                        updateDownloadDialog = dialog
                                     }
                                 }
                                 .setNegativeButton(getString(R.string.no), null)
@@ -505,6 +528,30 @@ class SettingsActivity : AppCompatActivity() {
                         } else {
                             Toast.makeText(requireContext(), R.string.no_updates_found, Toast.LENGTH_LONG).show()
                         }
+                    }
+                }
+            }
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    viewModel.updateProgress.collectLatest {
+                        updateDownloadDialogBinding?.let { binding ->
+                            val size = viewModel.updateSize
+                            if (size != null) {
+                                binding.textView.text = getString(
+                                    R.string.downloading_update_progress,
+                                    Formatter.formatFileSize(requireContext(), it.toLong()),
+                                    Formatter.formatFileSize(requireContext(), size),
+                                )
+                                binding.progressBar.progress = (((it.toFloat() / size) * 100)).toInt()
+                            }
+                        }
+                    }
+                }
+            }
+            viewLifecycleOwner.lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    viewModel.closeUpdateDialog.collectLatest {
+                        updateDownloadDialog?.dismiss()
                     }
                 }
             }
@@ -533,7 +580,7 @@ class SettingsActivity : AppCompatActivity() {
                 requireActivity().recreate()
                 true
             }
-            findPreference<SwitchPreferenceCompat>(C.UI_ROUNDUSERIMAGE)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_ROUND_USER_IMAGE)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.THEME)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_THEME_FOLLOW_SYSTEM)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.UI_THEME_DARK_ON)?.onPreferenceChangeListener = changeListener
@@ -585,13 +632,13 @@ class SettingsActivity : AppCompatActivity() {
                 (requireActivity() as? SettingsActivity)?.setResult()
                 true
             }
-            findPreference<SwitchPreferenceCompat>(C.UI_ROUNDUSERIMAGE)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(C.UI_TRUNCATEVIEWCOUNT)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_ROUND_USER_IMAGE)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_TRUNCATE_VIEW_COUNT)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_UPTIME)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_TAGS)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(C.UI_BROADCASTERSCOUNT)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_BROADCASTERS_COUNT)?.onPreferenceChangeListener = changeListener
             findPreference<SwitchPreferenceCompat>(C.UI_BOOKMARK_TIME_LEFT)?.onPreferenceChangeListener = changeListener
-            findPreference<SwitchPreferenceCompat>(C.UI_SCROLLTOP)?.onPreferenceChangeListener = changeListener
+            findPreference<SwitchPreferenceCompat>(C.UI_SCROLL_TOP)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.PORTRAIT_COLUMN_COUNT)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.LANDSCAPE_COLUMN_COUNT)?.onPreferenceChangeListener = changeListener
             findPreference<ListPreference>(C.COMPACT_STREAMS)?.onPreferenceChangeListener = changeListener
@@ -713,7 +760,7 @@ class SettingsActivity : AppCompatActivity() {
                     SettingsDragListItem(
                         key = split[0],
                         text = when (split[0]) {
-                            "0" -> getString(R.string.suggested)
+                            "0" -> getString(R.string.suggestions)
                             "1" -> getString(R.string.videos)
                             "2" -> getString(R.string.clips)
                             "3" -> getString(R.string.chat)
@@ -1394,107 +1441,6 @@ class SettingsActivity : AppCompatActivity() {
     class DebugSettingsFragment : MaterialPreferenceFragment() {
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.debug_preferences, rootKey)
-            findPreference<Preference>("api_settings")?.setOnPreferenceClickListener { preference ->
-                var newId = 1000
-                val view = LinearLayout(requireContext()).apply {
-                    id = R.id.layout
-                    orientation = LinearLayout.VERTICAL
-                }
-                val list = listOf(
-                    Triple(getString(R.string.games), C.API_PREFS_GAMES, C.DEFAULT_API_PREFS_GAMES),
-                    Triple(getString(R.string.streams), C.API_PREFS_STREAMS, C.DEFAULT_API_PREFS_STREAMS),
-                    Triple(getString(R.string.followed_games), C.API_PREFS_FOLLOWED_GAMES, C.DEFAULT_API_PREFS_FOLLOWED_GAMES),
-                    Triple(getString(R.string.followed_streams), C.API_PREFS_FOLLOWED_STREAMS, C.DEFAULT_API_PREFS_FOLLOWED_STREAMS),
-                    Triple(getString(R.string.followed_videos), C.API_PREFS_FOLLOWED_VIDEOS, C.DEFAULT_API_PREFS_FOLLOWED_VIDEOS),
-                    Triple(getString(R.string.followed_channels), C.API_PREFS_FOLLOWED_CHANNELS, C.DEFAULT_API_PREFS_FOLLOWED_CHANNELS),
-                    Triple(getString(R.string.channel_videos), C.API_PREFS_CHANNEL_VIDEOS, C.DEFAULT_API_PREFS_CHANNEL_VIDEOS),
-                    Triple(getString(R.string.channel_clips), C.API_PREFS_CHANNEL_CLIPS, C.DEFAULT_API_PREFS_CHANNEL_CLIPS),
-                    Triple(getString(R.string.game_videos), C.API_PREFS_GAME_VIDEOS, C.DEFAULT_API_PREFS_GAME_VIDEOS),
-                    Triple(getString(R.string.game_streams), C.API_PREFS_GAME_STREAMS, C.DEFAULT_API_PREFS_GAME_STREAMS),
-                    Triple(getString(R.string.game_clips), C.API_PREFS_GAME_CLIPS, C.DEFAULT_API_PREFS_GAME_CLIPS),
-                    Triple(getString(R.string.search_videos), C.API_PREFS_SEARCH_VIDEOS, C.DEFAULT_API_PREFS_SEARCH_VIDEOS),
-                    Triple(getString(R.string.search_streams), C.API_PREFS_SEARCH_STREAMS, C.DEFAULT_API_PREFS_SEARCH_STREAMS),
-                    Triple(getString(R.string.search_channels), C.API_PREFS_SEARCH_CHANNELS, C.DEFAULT_API_PREFS_SEARCH_CHANNELS),
-                    Triple(getString(R.string.search_games), C.API_PREFS_SEARCH_GAMES, C.DEFAULT_API_PREFS_SEARCH_GAMES),
-                ).map { item ->
-                    newId++
-                    view.addView(TextView(requireContext()).apply {
-                        text = item.first
-                        layoutParams = LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.WRAP_CONTENT
-                        ).apply {
-                            val horizontalMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 20f, resources.displayMetrics).toInt()
-                            val verticalMargin = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 3f, resources.displayMetrics).toInt()
-                            setMargins(horizontalMargin, verticalMargin, horizontalMargin, verticalMargin)
-                        }
-                        context.obtainStyledAttributes(intArrayOf(com.google.android.material.R.attr.textAppearanceTitleMedium)).use {
-                            TextViewCompat.setTextAppearance(this, it.getResourceId(0, 0))
-                        }
-                    })
-                    val prefKey = item.second
-                    val list = (requireContext().prefs().getString(prefKey, null) ?: item.third).split(',').map {
-                        val split = it.split(':')
-                        SettingsDragListItem(
-                            key = split[0],
-                            text = when (split[0]) {
-                                "0" -> getString(R.string.api_gql)
-                                "1" -> getString(R.string.api_gql_persisted_query)
-                                "2" -> getString(R.string.api_helix)
-                                else -> getString(R.string.api_gql)
-                            },
-                            default = false,
-                            enabled = split[1] != "0",
-                        )
-                    }
-                    val listAdapter = SettingsDragListAdapter()
-                    val itemTouchHelper = ItemTouchHelper(
-                        object : ItemTouchHelper.SimpleCallback(ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0) {
-                            override fun onMove(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
-                                Collections.swap(list, viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-                                listAdapter.notifyItemMoved(viewHolder.bindingAdapterPosition, target.bindingAdapterPosition)
-                                return true
-                            }
-
-                            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
-
-                            override fun isLongPressDragEnabled(): Boolean {
-                                return false
-                            }
-                        }
-                    )
-                    listAdapter.itemTouchHelper = itemTouchHelper
-                    val recyclerView = RecyclerView(requireContext()).apply {
-                        id = newId
-                        layoutManager = LinearLayoutManager(requireContext())
-                        adapter = listAdapter
-                    }
-                    itemTouchHelper.attachToRecyclerView(recyclerView)
-                    listAdapter.submitList(list)
-                    view.addView(recyclerView)
-                    prefKey to listAdapter
-                }
-                requireContext().getAlertDialogBuilder()
-                    .setTitle(preference.title)
-                    .setView(NestedScrollView(requireContext()).apply {
-                        addView(view)
-                        val padding = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 10f, resources.displayMetrics).toInt()
-                        setPadding(0, padding, 0, 0)
-                    })
-                    .setPositiveButton(getString(android.R.string.ok)) { _, _ ->
-                        requireContext().prefs().edit {
-                            list.forEach { item ->
-                                putString(item.first, item.second.currentList.joinToString(",") {
-                                    "${it.key}:${if (it.enabled) "1" else "0"}"
-                                })
-                            }
-                            (requireActivity() as? SettingsActivity)?.setResult()
-                        }
-                    }
-                    .setNegativeButton(getString(android.R.string.cancel), null)
-                    .show()
-                true
-            }
             findPreference<EditTextPreference>("gql_headers")?.apply {
                 isPersistent = false
                 text = requireContext().tokenPrefs().getString(C.GQL_HEADERS, null)
@@ -1506,7 +1452,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             findPreference<Preference>("get_integrity_token")?.setOnPreferenceClickListener {
-                IntegrityDialog.show(childFragmentManager)
+                IntegrityDialog.newInstance(null).show(childFragmentManager, null)
                 true
             }
             val httpEngine = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7

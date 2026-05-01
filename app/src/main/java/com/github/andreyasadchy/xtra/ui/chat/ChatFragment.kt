@@ -44,7 +44,6 @@ import com.github.andreyasadchy.xtra.model.chat.Emote
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.ui.channel.ChannelPagerFragmentDirections
 import com.github.andreyasadchy.xtra.ui.common.BaseNetworkFragment
-import com.github.andreyasadchy.xtra.ui.common.IntegrityDialog
 import com.github.andreyasadchy.xtra.ui.main.MainActivity
 import com.github.andreyasadchy.xtra.ui.player.Media3PlayerFragment
 import com.github.andreyasadchy.xtra.ui.player.PlayerFragment
@@ -110,15 +109,8 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         super.onViewCreated(view, savedInstanceState)
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.integrity.collectLatest {
-                    if (it != null &&
-                        it != "done" &&
-                        requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false) &&
-                        requireContext().prefs().getBoolean(C.USE_WEBVIEW_INTEGRITY, true)
-                    ) {
-                        IntegrityDialog.show(childFragmentManager, it)
-                        viewModel.integrity.value = "done"
-                    }
+                viewModel.integrity.collect {
+                    (requireActivity() as? MainActivity)?.getNewIntegrityToken(it, childFragmentManager)
                 }
             }
         }
@@ -149,21 +141,21 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         stvUsers = viewModel.stvUsers,
                         enableTimestamps = requireContext().prefs().getBoolean(C.CHAT_TIMESTAMPS, false),
                         timestampFormat = requireContext().prefs().getString(C.CHAT_TIMESTAMP_FORMAT, "0"),
-                        firstMsgVisibility = requireContext().prefs().getString(C.CHAT_FIRSTMSG_VISIBILITY, "0")?.toIntOrNull() ?: 0,
+                        firstMsgVisibility = requireContext().prefs().getString(C.CHAT_FIRST_MSG_VISIBILITY, "0")?.toIntOrNull() ?: 0,
                         firstChatMsg = getString(R.string.chat_first),
                         redeemedChatMsg = getString(R.string.redeemed),
                         redeemedNoMsg = getString(R.string.user_redeemed),
                         rewardChatMsg = getString(R.string.chat_reward),
                         replyMessage = getString(R.string.replying_to_message),
-                        useRandomColors = requireContext().prefs().getBoolean(C.CHAT_RANDOMCOLOR, true),
+                        useRandomColors = requireContext().prefs().getBoolean(C.CHAT_RANDOM_COLOR, true),
                         useReadableColors = requireContext().prefs().getBoolean(C.CHAT_THEME_ADAPTED_USERNAME_COLOR, true),
                         isLightTheme = requireContext().obtainStyledAttributes(intArrayOf(androidx.appcompat.R.attr.isLightTheme)).use {
                             it.getBoolean(0, false)
                         },
                         nameDisplay = requireContext().prefs().getString(C.UI_NAME_DISPLAY, "0"),
-                        useBoldNames = requireContext().prefs().getBoolean(C.CHAT_BOLDNAMES, false),
+                        useBoldNames = requireContext().prefs().getBoolean(C.CHAT_BOLD_NAMES, false),
                         showNamePaints = requireContext().prefs().getBoolean(C.CHAT_SHOW_PAINTS, true),
-                        showStvBadges = requireContext().prefs().getBoolean(C.CHAT_SHOW_STV_BADGES, true),
+                        showSTVBadges = requireContext().prefs().getBoolean(C.CHAT_SHOW_STV_BADGES, true),
                         showPersonalEmotes = requireContext().prefs().getBoolean(C.CHAT_SHOW_PERSONAL_EMOTES, true),
                         showSystemMessageEmotes = requireContext().prefs().getBoolean(C.CHAT_SYSTEM_MESSAGE_EMOTES, true),
                         chatUrl = chatUrl,
@@ -184,7 +176,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                         badgeSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, (requireContext().prefs().getString(C.CHAT_BADGE_SIZE, "18.5")?.toFloatOrNull() ?: 18.5f) * sizeModifier, resources.displayMetrics).toInt(),
                         emoteQuality = requireContext().prefs().getString(C.CHAT_IMAGE_QUALITY, "4") ?: "4",
                         animateGifs = requireContext().prefs().getBoolean(C.ANIMATED_EMOTES, true),
-                        enableOverlayEmotes = requireContext().prefs().getBoolean(C.CHAT_ZEROWIDTH, true),
+                        enableOverlayEmotes = requireContext().prefs().getBoolean(C.CHAT_ZERO_WIDTH, true),
                         translateMessage = this@ChatFragment::onTranslateMessageClicked,
                         showLanguageDownloadDialog = this@ChatFragment::showLanguageDownloadDialog,
                         channelId = channelId,
@@ -448,7 +440,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                                             requireContext().imageLoader.enqueue(
                                                 ImageRequest.Builder(requireContext()).apply {
                                                     data(raid.targetImage)
-                                                    if (requireContext().prefs().getBoolean(C.UI_ROUNDUSERIMAGE, true)) {
+                                                    if (requireContext().prefs().getBoolean(C.UI_ROUND_USER_IMAGE, true)) {
                                                         transformations(CircleCropTransformation())
                                                     }
                                                     crossfade(true)
@@ -826,7 +818,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
             val channelId = args.getString(KEY_CHANNEL_ID)
             val channelLogin = args.getString(KEY_CHANNEL_LOGIN)
             if (args.getBoolean(KEY_IS_LIVE)) {
-                viewModel.startLive(requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"), channelId, channelLogin, args.getString(KEY_CHANNEL_NAME), args.getString(KEY_STREAM_ID))
+                viewModel.startLive(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), channelId, channelLogin, args.getString(KEY_CHANNEL_NAME), args.getString(KEY_STREAM_ID))
             } else {
                 val videoId = args.getString(KEY_VIDEO_ID)
                 val startTime = args.getInt(KEY_START_TIME)
@@ -877,7 +869,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         if (channelLogin != null) {
             viewModel.startLiveChat(requireArguments().getString(KEY_CHANNEL_ID), channelLogin)
             if (requireContext().prefs().getBoolean(C.CHAT_RECENT, true)) {
-                viewModel.loadRecentMessages(requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"), channelLogin)
+                viewModel.loadRecentMessages(requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP), channelLogin)
             }
         }
         viewModel.autoReconnect = true
@@ -910,8 +902,14 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
         return viewModel.translateAllMessages.value == true
     }
 
-    fun toggleTranslateAllMessages(enable: Boolean) {
-        viewModel.translateAllMessages.value = enable
+    fun saveTranslatedChannel(channelId: String) {
+        viewModel.translateAllMessages.value = true
+        viewModel.saveTranslatedChannel(channelId)
+    }
+
+    fun deleteTranslatedChannel(channelId: String) {
+        viewModel.translateAllMessages.value = false
+        viewModel.deleteTranslatedChannel(channelId)
     }
 
     fun emoteMenuIsVisible() = binding.emoteMenu.isVisible
@@ -957,7 +955,7 @@ class ChatFragment : BaseNetworkFragment(), MessageClickedDialog.OnButtonClickLi
                 viewModel.send(
                     message = text,
                     replyId = replyId,
-                    networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                    networkLibrary = requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                     gqlHeaders = TwitchApiHelper.getGQLHeaders(requireContext(), true),
                     helixHeaders = TwitchApiHelper.getHelixHeaders(requireContext()),
                     accountId = requireContext().tokenPrefs().getString(C.USER_ID, null),

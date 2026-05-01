@@ -8,7 +8,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.cachedIn
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
-import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
+import com.github.andreyasadchy.xtra.repository.LocalChannelFollowsRepository
 import com.github.andreyasadchy.xtra.repository.datasource.FollowedStreamsDataSource
 import com.github.andreyasadchy.xtra.util.C
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
@@ -21,7 +21,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FollowedStreamsViewModel @Inject constructor(
     @ApplicationContext applicationContext: Context,
-    private val localFollowsChannel: LocalFollowChannelRepository,
+    private val localChannelFollowsRepository: LocalChannelFollowsRepository,
     private val graphQLRepository: GraphQLRepository,
     private val helixRepository: HelixRepository,
 ) : ViewModel() {
@@ -35,19 +35,13 @@ class FollowedStreamsViewModel @Inject constructor(
     ) {
         FollowedStreamsDataSource(
             userId = applicationContext.tokenPrefs().getString(C.USER_ID, null),
-            localFollowsChannel = localFollowsChannel,
+            localChannelFollowsRepository = localChannelFollowsRepository,
             gqlHeaders = TwitchApiHelper.getGQLHeaders(applicationContext, true),
             graphQLRepository = graphQLRepository,
             helixHeaders = TwitchApiHelper.getHelixHeaders(applicationContext),
             helixRepository = helixRepository,
             enableIntegrity = applicationContext.prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-            apiPref = (applicationContext.prefs().getString(C.API_PREFS_FOLLOWED_STREAMS, null) ?: C.DEFAULT_API_PREFS_FOLLOWED_STREAMS).split(',').mapNotNull {
-                val split = it.split(':')
-                val key = split[0]
-                val enabled = split[1] != "0"
-                if (enabled) key else null
-            },
-            networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+            networkLibrary = applicationContext.prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
         )
     }.flow.cachedIn(viewModelScope)
 }

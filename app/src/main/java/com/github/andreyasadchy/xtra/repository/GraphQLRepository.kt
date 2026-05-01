@@ -13,12 +13,15 @@ import com.apollographql.apollo.api.json.writeObject
 import com.apollographql.apollo.api.parseResponse
 import com.github.andreyasadchy.xtra.graphql.BadgesQuery
 import com.github.andreyasadchy.xtra.graphql.ClipUrlsQuery
+import com.github.andreyasadchy.xtra.graphql.EmoteQuery
 import com.github.andreyasadchy.xtra.graphql.GameBoxArtQuery
 import com.github.andreyasadchy.xtra.graphql.GameClipsQuery
 import com.github.andreyasadchy.xtra.graphql.GameQuery
 import com.github.andreyasadchy.xtra.graphql.GameStreamsQuery
 import com.github.andreyasadchy.xtra.graphql.GameVideosQuery
 import com.github.andreyasadchy.xtra.graphql.SearchChannelsQuery
+import com.github.andreyasadchy.xtra.graphql.SearchFreeformTagsQuery
+import com.github.andreyasadchy.xtra.graphql.SearchGameTagsQuery
 import com.github.andreyasadchy.xtra.graphql.SearchGamesQuery
 import com.github.andreyasadchy.xtra.graphql.SearchStreamsQuery
 import com.github.andreyasadchy.xtra.graphql.SearchVideosQuery
@@ -34,6 +37,7 @@ import com.github.andreyasadchy.xtra.graphql.TopStreamsQuery
 import com.github.andreyasadchy.xtra.graphql.UserAboutQuery
 import com.github.andreyasadchy.xtra.graphql.UserBadgesQuery
 import com.github.andreyasadchy.xtra.graphql.UserChannelPageQuery
+import com.github.andreyasadchy.xtra.graphql.UserChattersQuery
 import com.github.andreyasadchy.xtra.graphql.UserCheerEmotesQuery
 import com.github.andreyasadchy.xtra.graphql.UserClipsQuery
 import com.github.andreyasadchy.xtra.graphql.UserEmotesQuery
@@ -49,6 +53,8 @@ import com.github.andreyasadchy.xtra.graphql.UserVideosQuery
 import com.github.andreyasadchy.xtra.graphql.UsersLastBroadcastQuery
 import com.github.andreyasadchy.xtra.graphql.UsersStreamQuery
 import com.github.andreyasadchy.xtra.graphql.UsersTypeQuery
+import com.github.andreyasadchy.xtra.graphql.VideoCommentsQuery
+import com.github.andreyasadchy.xtra.graphql.VideoMomentsQuery
 import com.github.andreyasadchy.xtra.graphql.VideoPlaybackAccessTokenQuery
 import com.github.andreyasadchy.xtra.graphql.VideoQuery
 import com.github.andreyasadchy.xtra.graphql.type.BadgeImageSize
@@ -59,7 +65,7 @@ import com.github.andreyasadchy.xtra.graphql.type.StreamSort
 import com.github.andreyasadchy.xtra.graphql.type.VideoSort
 import com.github.andreyasadchy.xtra.model.gql.ErrorResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelClipsResponse
-import com.github.andreyasadchy.xtra.model.gql.channel.ChannelSuggestedResponse
+import com.github.andreyasadchy.xtra.model.gql.channel.ChannelSuggestionsResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelVideosResponse
 import com.github.andreyasadchy.xtra.model.gql.channel.ChannelViewerListResponse
 import com.github.andreyasadchy.xtra.model.gql.chat.BadgesResponse
@@ -93,8 +99,8 @@ import com.github.andreyasadchy.xtra.model.gql.tag.TagResponse
 import com.github.andreyasadchy.xtra.model.gql.video.VideoGamesResponse
 import com.github.andreyasadchy.xtra.model.gql.video.VideoMessagesResponse
 import com.github.andreyasadchy.xtra.util.C
-import com.github.andreyasadchy.xtra.util.HttpEngineUtils
-import com.github.andreyasadchy.xtra.util.getByteArrayCronetCallback
+import com.github.andreyasadchy.xtra.util.NetworkUtils
+import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -113,9 +119,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okio.buffer
 import okio.source
 import org.chromium.net.CronetEngine
-import org.chromium.net.apihelpers.RedirectHandlers
 import org.chromium.net.apihelpers.UploadDataProviders
-import org.chromium.net.apihelpers.UrlRequestCallbacks
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import javax.inject.Inject
@@ -144,41 +148,28 @@ class GraphQLRepository @Inject constructor(
             }
         }
         when {
-            networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+            networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                 val response = suspendCancellableCoroutine { continuation ->
-                    httpEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).apply {
+                    httpEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).apply {
                         headers.forEach { addHeader(it.key, it.value) }
                         addHeader("Content-Type", "application/json")
-                        setUploadDataProvider(HttpEngineUtils.byteArrayUploadProvider(body.toByteArray()), cronetExecutor)
+                        setUploadDataProvider(NetworkUtils.byteArrayUploadProvider(body.toByteArray()), cronetExecutor)
                     }.build().start()
                 }
                 response.second.inputStream().source().buffer().jsonReader().use {
                     query.parseResponse(it)
                 }
             }
-            networkLibrary == "Cronet" && cronetEngine != null -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                    cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", request.callback, cronetExecutor).apply {
+            networkLibrary == C.CRONET && cronetEngine != null -> {
+                val response = suspendCancellableCoroutine { continuation ->
+                    cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).apply {
                         headers.forEach { addHeader(it.key, it.value) }
                         addHeader("Content-Type", "application/json")
                         setUploadDataProvider(UploadDataProviders.create(body.toByteArray()), cronetExecutor)
                     }.build().start()
-                    val response = request.future.get().responseBody as ByteArray
-                    response.inputStream().source().buffer().jsonReader().use {
-                        query.parseResponse(it)
-                    }
-                } else {
-                    val response = suspendCancellableCoroutine { continuation ->
-                        cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", getByteArrayCronetCallback(continuation), cronetExecutor).apply {
-                            headers.forEach { addHeader(it.key, it.value) }
-                            addHeader("Content-Type", "application/json")
-                            setUploadDataProvider(UploadDataProviders.create(body.toByteArray()), cronetExecutor)
-                        }.build().start()
-                    }
-                    response.second.inputStream().source().buffer().jsonReader().use {
-                        query.parseResponse(it)
-                    }
+                }
+                response.second.inputStream().source().buffer().jsonReader().use {
+                    query.parseResponse(it)
                 }
             }
             else -> {
@@ -187,7 +178,7 @@ class GraphQLRepository @Inject constructor(
                     headers(headers.toHeaders())
                     header("Content-Type", "application/json")
                     post(body.toRequestBody())
-                }.build()).execute().use { response ->
+                }.build()).executeAsync().use { response ->
                     response.body.byteStream().source().buffer().jsonReader().use {
                         query.parseResponse(it)
                     }
@@ -198,35 +189,25 @@ class GraphQLRepository @Inject constructor(
 
     private suspend fun sendPersistedQuery(networkLibrary: String?, headers: Map<String, String>, body: String): String = withContext(Dispatchers.IO) {
         when {
-            networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+            networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                 val response = suspendCancellableCoroutine { continuation ->
-                    httpEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).apply {
+                    httpEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).apply {
                         headers.forEach { addHeader(it.key, it.value) }
                         addHeader("Content-Type", "application/json")
-                        setUploadDataProvider(HttpEngineUtils.byteArrayUploadProvider(body.toByteArray()), cronetExecutor)
+                        setUploadDataProvider(NetworkUtils.byteArrayUploadProvider(body.toByteArray()), cronetExecutor)
                     }.build().start()
                 }
                 String(response.second)
             }
-            networkLibrary == "Cronet" && cronetEngine != null -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                    val request = UrlRequestCallbacks.forStringBody(RedirectHandlers.alwaysFollow())
-                    cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", request.callback, cronetExecutor).apply {
+            networkLibrary == C.CRONET && cronetEngine != null -> {
+                val response = suspendCancellableCoroutine { continuation ->
+                    cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).apply {
                         headers.forEach { addHeader(it.key, it.value) }
                         addHeader("Content-Type", "application/json")
                         setUploadDataProvider(UploadDataProviders.create(body.toByteArray()), cronetExecutor)
                     }.build().start()
-                    request.future.get().responseBody as String
-                } else {
-                    val response = suspendCancellableCoroutine { continuation ->
-                        cronetEngine.get().newUrlRequestBuilder("https://gql.twitch.tv/gql/", getByteArrayCronetCallback(continuation), cronetExecutor).apply {
-                            headers.forEach { addHeader(it.key, it.value) }
-                            addHeader("Content-Type", "application/json")
-                            setUploadDataProvider(UploadDataProviders.create(body.toByteArray()), cronetExecutor)
-                        }.build().start()
-                    }
-                    String(response.second)
                 }
+                String(response.second)
             }
             else -> {
                 okHttpClient.newCall(Request.Builder().apply {
@@ -234,7 +215,7 @@ class GraphQLRepository @Inject constructor(
                     headers(headers.toHeaders())
                     header("Content-Type", "application/json")
                     post(body.toRequestBody())
-                }.build()).execute().use { response ->
+                }.build()).executeAsync().use { response ->
                     response.body.string()
                 }
             }
@@ -248,6 +229,11 @@ class GraphQLRepository @Inject constructor(
 
     suspend fun loadQueryClipUrls(networkLibrary: String?, headers: Map<String, String>, slug: String): ApolloResponse<ClipUrlsQuery.Data> = withContext(Dispatchers.IO) {
         val query = ClipUrlsQuery(slug)
+        sendQuery(networkLibrary, headers, query)
+    }
+
+    suspend fun loadQueryEmote(networkLibrary: String?, headers: Map<String, String>, id: String): ApolloResponse<EmoteQuery.Data> = withContext(Dispatchers.IO) {
+        val query = EmoteQuery(id)
         sendQuery(networkLibrary, headers, query)
     }
 
@@ -318,11 +304,27 @@ class GraphQLRepository @Inject constructor(
         sendQuery(networkLibrary, headers, query)
     }
 
+    suspend fun loadQuerySearchFreeformTags(networkLibrary: String?, headers: Map<String, String>, query: String, first: Int?): ApolloResponse<SearchFreeformTagsQuery.Data> = withContext(Dispatchers.IO) {
+        val query = SearchFreeformTagsQuery(
+            query = query,
+            first = Optional.Present(first),
+        )
+        sendQuery(networkLibrary, headers, query)
+    }
+
     suspend fun loadQuerySearchGames(networkLibrary: String?, headers: Map<String, String>, query: String, first: Int?, after: String?): ApolloResponse<SearchGamesQuery.Data> = withContext(Dispatchers.IO) {
         val query = SearchGamesQuery(
             query = query,
             first = Optional.Present(first),
             after = Optional.Present(after),
+        )
+        sendQuery(networkLibrary, headers, query)
+    }
+
+    suspend fun loadQuerySearchGameTags(networkLibrary: String?, headers: Map<String, String>, query: String, first: Int?): ApolloResponse<SearchGameTagsQuery.Data> = withContext(Dispatchers.IO) {
+        val query = SearchGameTagsQuery(
+            query = query,
+            first = Optional.Present(first),
         )
         sendQuery(networkLibrary, headers, query)
     }
@@ -452,6 +454,14 @@ class GraphQLRepository @Inject constructor(
         sendQuery(networkLibrary, headers, query)
     }
 
+    suspend fun loadQueryUserChatters(networkLibrary: String?, headers: Map<String, String>, id: String? = null, login: String? = null): ApolloResponse<UserChattersQuery.Data> = withContext(Dispatchers.IO) {
+        val query = UserChattersQuery(
+            id = if (!id.isNullOrBlank()) Optional.Present(id) else Optional.Absent,
+            login = if (!login.isNullOrBlank()) Optional.Present(login) else Optional.Absent,
+        )
+        sendQuery(networkLibrary, headers, query)
+    }
+
     suspend fun loadQueryUserCheerEmotes(networkLibrary: String?, headers: Map<String, String>, id: String? = null, login: String? = null): ApolloResponse<UserCheerEmotesQuery.Data> = withContext(Dispatchers.IO) {
         val query = UserCheerEmotesQuery(
             id = if (!id.isNullOrBlank()) Optional.Present(id) else Optional.Absent,
@@ -566,6 +576,25 @@ class GraphQLRepository @Inject constructor(
 
     suspend fun loadQueryVideo(networkLibrary: String?, headers: Map<String, String>, id: String?): ApolloResponse<VideoQuery.Data> = withContext(Dispatchers.IO) {
         val query = VideoQuery(Optional.Present(id))
+        sendQuery(networkLibrary, headers, query)
+    }
+
+    suspend fun loadQueryVideoComments(networkLibrary: String?, headers: Map<String, String>, videoId: String?, offset: Int? = null, cursor: String? = null): ApolloResponse<VideoCommentsQuery.Data> = withContext(Dispatchers.IO) {
+        val query = VideoCommentsQuery(
+            id = Optional.Present(videoId),
+            first = Optional.Present(100),
+            after = Optional.Present(cursor),
+            offset = if (offset != null) Optional.Present(offset) else Optional.Absent,
+        )
+        sendQuery(networkLibrary, headers, query)
+    }
+
+    suspend fun loadQueryVideoMoments(networkLibrary: String?, headers: Map<String, String>, videoId: String?): ApolloResponse<VideoMomentsQuery.Data> = withContext(Dispatchers.IO) {
+        val query = VideoMomentsQuery(
+            id = Optional.Present(videoId),
+            first = Optional.Present(100),
+            after = Optional.Present(null),
+        )
         sendQuery(networkLibrary, headers, query)
     }
 
@@ -814,7 +843,7 @@ class GraphQLRepository @Inject constructor(
         json.decodeFromString<GameClipsResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
-    suspend fun loadChannelSuggested(networkLibrary: String?, headers: Map<String, String>, channelLogin: String?): ChannelSuggestedResponse = withContext(Dispatchers.IO) {
+    suspend fun loadChannelSuggestions(networkLibrary: String?, headers: Map<String, String>, channelLogin: String?): ChannelSuggestionsResponse = withContext(Dispatchers.IO) {
         val body = buildJsonObject {
             putJsonObject("extensions") {
                 putJsonObject("persistedQuery") {
@@ -844,7 +873,7 @@ class GraphQLRepository @Inject constructor(
                 put("X-Device-Id", randomId)
             }
         } else headers
-        json.decodeFromString<ChannelSuggestedResponse>(sendPersistedQuery(networkLibrary, headers, body))
+        json.decodeFromString<ChannelSuggestionsResponse>(sendPersistedQuery(networkLibrary, headers, body))
     }
 
     suspend fun loadChannelVideos(networkLibrary: String?, headers: Map<String, String>, channelLogin: String?, type: String?, sort: String?, limit: Int?, cursor: String?): ChannelVideosResponse = withContext(Dispatchers.IO) {

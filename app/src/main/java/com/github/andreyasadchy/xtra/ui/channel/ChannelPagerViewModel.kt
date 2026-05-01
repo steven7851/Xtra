@@ -8,23 +8,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.andreyasadchy.xtra.model.NotificationUser
 import com.github.andreyasadchy.xtra.model.ShownNotification
-import com.github.andreyasadchy.xtra.model.ui.LocalFollowChannel
+import com.github.andreyasadchy.xtra.model.ui.LocalChannelFollow
 import com.github.andreyasadchy.xtra.model.ui.Stream
 import com.github.andreyasadchy.xtra.model.ui.User
 import com.github.andreyasadchy.xtra.repository.BookmarksRepository
 import com.github.andreyasadchy.xtra.repository.GraphQLRepository
 import com.github.andreyasadchy.xtra.repository.HelixRepository
-import com.github.andreyasadchy.xtra.repository.LocalFollowChannelRepository
-import com.github.andreyasadchy.xtra.repository.NotificationUsersRepository
-import com.github.andreyasadchy.xtra.repository.OfflineRepository
-import com.github.andreyasadchy.xtra.repository.ShownNotificationsRepository
+import com.github.andreyasadchy.xtra.repository.LocalChannelFollowsRepository
+import com.github.andreyasadchy.xtra.repository.NotificationsRepository
+import com.github.andreyasadchy.xtra.repository.OfflineVideosRepository
 import com.github.andreyasadchy.xtra.util.C
-import com.github.andreyasadchy.xtra.util.HttpEngineUtils
+import com.github.andreyasadchy.xtra.util.NetworkUtils
+import com.github.andreyasadchy.xtra.util.NetworkUtils.executeAsync
 import com.github.andreyasadchy.xtra.util.TwitchApiHelper
-import com.github.andreyasadchy.xtra.util.getByteArrayCronetCallback
 import dagger.Lazy
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -32,8 +32,6 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.chromium.net.CronetEngine
-import org.chromium.net.apihelpers.RedirectHandlers
-import org.chromium.net.apihelpers.UrlRequestCallbacks
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
@@ -41,11 +39,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class ChannelPagerViewModel @Inject constructor(
-    private val localFollowsChannel: LocalFollowChannelRepository,
-    private val offlineRepository: OfflineRepository,
+    private val localChannelFollowsRepository: LocalChannelFollowsRepository,
+    private val offlineVideosRepository: OfflineVideosRepository,
     private val bookmarksRepository: BookmarksRepository,
-    private val shownNotificationsRepository: ShownNotificationsRepository,
-    private val notificationUsersRepository: NotificationUsersRepository,
+    private val notificationsRepository: NotificationsRepository,
     private val graphQLRepository: GraphQLRepository,
     private val helixRepository: HelixRepository,
     private val httpEngine: Lazy<HttpEngine>?,
@@ -55,7 +52,7 @@ class ChannelPagerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    val integrity = MutableStateFlow<String?>(null)
+    val integrity = MutableSharedFlow<String?>()
 
     private val args = ChannelPagerFragmentArgs.fromSavedStateHandle(savedStateHandle)
     private val _notificationsEnabled = MutableStateFlow<Boolean?>(null)
@@ -76,9 +73,9 @@ class ChannelPagerViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     val response = graphQLRepository.loadQueryUserChannelPage(networkLibrary, gqlHeaders, args.channelId, if (args.channelId.isNullOrBlank()) args.channelLogin else null)
-                    if (enableIntegrity && integrity.value == null) {
-                        response.errors?.find { it.message == "failed integrity check" }?.let {
-                            integrity.value = "refresh"
+                    if (enableIntegrity) {
+                        response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                            integrity.emit("refresh")
                             return@launch
                         }
                     }
@@ -170,9 +167,9 @@ class ChannelPagerViewModel @Inject constructor(
             try {
                 if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && _isFollowing.value == true && userId != channelId) {
                     val errorMessage = graphQLRepository.loadToggleNotificationsUser(networkLibrary, gqlHeaders, channelId, false).also { response ->
-                        if (enableIntegrity && integrity.value == null) {
-                            response.errors?.find { it.message == "failed integrity check" }?.let {
-                                integrity.value = "enableNotifications"
+                        if (enableIntegrity) {
+                            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                integrity.emit("enableNotifications")
                                 return@launch
                             }
                         }
@@ -184,17 +181,17 @@ class ChannelPagerViewModel @Inject constructor(
                         notifications.value = Pair(true, errorMessage)
                         if (notificationsEnabled) {
                             _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                                shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                                notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
                     }
                 } else {
-                    notificationUsersRepository.saveUser(NotificationUser(channelId))
+                    notificationsRepository.saveUser(NotificationUser(channelId))
                     _notificationsEnabled.value = true
                     notifications.value = Pair(true, null)
                     if (notificationsEnabled) {
                         _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                            shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                            notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                         }
                     }
                 }
@@ -209,9 +206,9 @@ class ChannelPagerViewModel @Inject constructor(
             try {
                 if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && _isFollowing.value == true && userId != channelId) {
                     val errorMessage = graphQLRepository.loadToggleNotificationsUser(networkLibrary, gqlHeaders, channelId, true).also { response ->
-                        if (enableIntegrity && integrity.value == null) {
-                            response.errors?.find { it.message == "failed integrity check" }?.let {
-                                integrity.value = "disableNotifications"
+                        if (enableIntegrity) {
+                            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                integrity.emit("disableNotifications")
                                 return@launch
                             }
                         }
@@ -223,7 +220,7 @@ class ChannelPagerViewModel @Inject constructor(
                         notifications.value = Pair(false, errorMessage)
                     }
                 } else {
-                    notificationUsersRepository.deleteUser(NotificationUser(channelId))
+                    notificationsRepository.deleteUser(NotificationUser(channelId))
                     _notificationsEnabled.value = false
                     notifications.value = Pair(false, null)
                 }
@@ -235,7 +232,7 @@ class ChannelPagerViewModel @Inject constructor(
 
     fun updateNotifications(networkLibrary: String?, gqlHeaders: Map<String, String>, helixHeaders: Map<String, String>) {
         viewModelScope.launch {
-            shownNotificationsRepository.getNewStreams(notificationUsersRepository, networkLibrary, gqlHeaders, graphQLRepository, helixHeaders, helixRepository)
+            notificationsRepository.getNewStreams(networkLibrary, gqlHeaders, helixHeaders)
         }
     }
 
@@ -263,11 +260,11 @@ class ChannelPagerViewModel @Inject constructor(
                                     targetId = channelId,
                                 ).data.firstOrNull()?.id == channelId
                                 _isFollowing.value = following
-                                _notificationsEnabled.value = notificationUsersRepository.getByUserId(channelId) != null
+                                _notificationsEnabled.value = notificationsRepository.getUserById(channelId) != null
                             }
                         } else {
-                            _isFollowing.value = localFollowsChannel.getFollowByUserId(channelId) != null
-                            _notificationsEnabled.value = notificationUsersRepository.getByUserId(channelId) != null
+                            _isFollowing.value = localChannelFollowsRepository.getById(channelId) != null
+                            _notificationsEnabled.value = notificationsRepository.getUserById(channelId) != null
                         }
                     }
                 } catch (e: Exception) {
@@ -283,9 +280,9 @@ class ChannelPagerViewModel @Inject constructor(
                 if (!channelId.isNullOrBlank()) {
                     if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
                         val errorMessage = graphQLRepository.loadFollowUser(networkLibrary, gqlHeaders, channelId, disableNotifications).also { response ->
-                            if (enableIntegrity && integrity.value == null) {
-                                response.errors?.find { it.message == "failed integrity check" }?.let {
-                                    integrity.value = "follow"
+                            if (enableIntegrity) {
+                                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                    integrity.emit("follow")
                                     return@launch
                                 }
                             }
@@ -300,21 +297,21 @@ class ChannelPagerViewModel @Inject constructor(
                             }
                             if (liveNotificationsEnabled) {
                                 _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                                    shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                                    notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                                 }
                             }
                         }
                     } else {
-                        localFollowsChannel.saveFollow(LocalFollowChannel(channelId, channelLogin, channelName))
+                        localChannelFollowsRepository.save(LocalChannelFollow(channelId, channelLogin, channelName))
                         _isFollowing.value = true
                         follow.value = Pair(true, null)
                         if (!disableNotifications) {
-                            notificationUsersRepository.saveUser(NotificationUser(channelId))
+                            notificationsRepository.saveUser(NotificationUser(channelId))
                             _notificationsEnabled.value = true
                         }
                         if (liveNotificationsEnabled) {
                             _stream.value?.createdAt.takeUnless { it.isNullOrBlank() }?.let { TwitchApiHelper.parseIso8601DateUTC(it) }?.let {
-                                shownNotificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
+                                notificationsRepository.saveList(listOf(ShownNotification(channelId, it)))
                             }
                         }
                     }
@@ -331,9 +328,9 @@ class ChannelPagerViewModel @Inject constructor(
                 if (!channelId.isNullOrBlank()) {
                     if (setting == 0 && !gqlHeaders[C.HEADER_TOKEN].isNullOrBlank() && userId != channelId) {
                         val errorMessage = graphQLRepository.loadUnfollowUser(networkLibrary, gqlHeaders, channelId).also { response ->
-                            if (enableIntegrity && integrity.value == null) {
-                                response.errors?.find { it.message == "failed integrity check" }?.let {
-                                    integrity.value = "unfollow"
+                            if (enableIntegrity) {
+                                response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let {
+                                    integrity.emit("unfollow")
                                     return@launch
                                 }
                             }
@@ -346,10 +343,10 @@ class ChannelPagerViewModel @Inject constructor(
                             _notificationsEnabled.value = false
                         }
                     } else {
-                        localFollowsChannel.getFollowByUserId(channelId)?.let { localFollowsChannel.deleteFollow(it) }
+                        localChannelFollowsRepository.getById(channelId)?.let { localChannelFollowsRepository.delete(it) }
                         _isFollowing.value = false
                         follow.value = Pair(false, null)
-                        notificationUsersRepository.deleteUser(NotificationUser(channelId))
+                        notificationsRepository.deleteUser(NotificationUser(channelId))
                         _notificationsEnabled.value = false
                     }
                 }
@@ -370,9 +367,9 @@ class ChannelPagerViewModel @Inject constructor(
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 when {
-                                    networkLibrary == "HttpEngine" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
+                                    networkLibrary == C.HTTP_ENGINE && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= 7 && httpEngine != null -> {
                                         val response = suspendCancellableCoroutine { continuation ->
-                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, HttpEngineUtils.byteArrayUrlCallback(continuation)).build().start()
+                                            httpEngine.get().newUrlRequestBuilder(it, cronetExecutor, NetworkUtils.byteArrayUrlCallback(continuation)).build().start()
                                         }
                                         if (response.first.httpStatusCode in 200..299) {
                                             FileOutputStream(path).use {
@@ -380,29 +377,18 @@ class ChannelPagerViewModel @Inject constructor(
                                             }
                                         }
                                     }
-                                    networkLibrary == "Cronet" && cronetEngine != null -> {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                                            val request = UrlRequestCallbacks.forByteArrayBody(RedirectHandlers.alwaysFollow())
-                                            cronetEngine.get().newUrlRequestBuilder(it, request.callback, cronetExecutor).build().start()
-                                            val response = request.future.get()
-                                            if (response.urlResponseInfo.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.responseBody as ByteArray)
-                                                }
-                                            }
-                                        } else {
-                                            val response = suspendCancellableCoroutine { continuation ->
-                                                cronetEngine.get().newUrlRequestBuilder(it, getByteArrayCronetCallback(continuation), cronetExecutor).build().start()
-                                            }
-                                            if (response.first.httpStatusCode in 200..299) {
-                                                FileOutputStream(path).use {
-                                                    it.write(response.second)
-                                                }
+                                    networkLibrary == C.CRONET && cronetEngine != null -> {
+                                        val response = suspendCancellableCoroutine { continuation ->
+                                            cronetEngine.get().newUrlRequestBuilder(it, NetworkUtils.byteArrayCronetUrlCallback(continuation), cronetExecutor).build().start()
+                                        }
+                                        if (response.first.httpStatusCode in 200..299) {
+                                            FileOutputStream(path).use {
+                                                it.write(response.second)
                                             }
                                         }
                                     }
                                     else -> {
-                                        okHttpClient.newCall(Request.Builder().url(it).build()).execute().use { response ->
+                                        okHttpClient.newCall(Request.Builder().url(it).build()).executeAsync().use { response ->
                                             if (response.isSuccessful) {
                                                 FileOutputStream(path).use { outputStream ->
                                                     response.body.byteStream().use { inputStream ->
@@ -419,21 +405,21 @@ class ChannelPagerViewModel @Inject constructor(
                         }
                         path
                     }
-                    localFollowsChannel.getFollowByUserId(userId)?.let {
-                        localFollowsChannel.updateFollow(it.apply {
+                    localChannelFollowsRepository.getById(userId)?.let {
+                        localChannelFollowsRepository.update(it.apply {
                             userLogin = user.login
                             userName = user.name
                         })
                     }
-                    offlineRepository.getVideosByUserId(userId).forEach {
-                        offlineRepository.updateVideo(it.apply {
+                    offlineVideosRepository.getByUserId(userId).forEach {
+                        offlineVideosRepository.update(it.apply {
                             channelLogin = user.login
                             channelName = user.name
                             channelLogo = downloadedLogo
                         })
                     }
-                    bookmarksRepository.getBookmarksByUserId(userId).forEach {
-                        bookmarksRepository.updateBookmark(it.apply {
+                    bookmarksRepository.getByUserId(userId).forEach {
+                        bookmarksRepository.update(it.apply {
                             userLogin = user.login
                             userName = user.name
                             userLogo = downloadedLogo

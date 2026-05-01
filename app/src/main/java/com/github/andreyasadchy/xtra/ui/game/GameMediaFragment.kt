@@ -64,7 +64,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
-class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, IntegrityDialog.CallbackListener {
+class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, IntegrityDialog.Listener {
 
     private var _binding: FragmentGameBinding? = null
     private val binding get() = _binding!!
@@ -90,15 +90,8 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
         super.onViewCreated(view, savedInstanceState)
         viewLifecycleOwner.lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.integrity.collectLatest {
-                    if (it != null &&
-                        it != "done" &&
-                        requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false) &&
-                        requireContext().prefs().getBoolean(C.USE_WEBVIEW_INTEGRITY, true)
-                    ) {
-                        IntegrityDialog.show(childFragmentManager, it)
-                        viewModel.integrity.value = "done"
-                    }
+                viewModel.integrity.collect {
+                    (requireActivity() as? MainActivity)?.getNewIntegrityToken(it, childFragmentManager)
                 }
             }
         }
@@ -146,7 +139,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                                         viewModel.deleteFollowGame(
                                             args.gameId,
                                             setting,
-                                            requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                                            requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                                             TwitchApiHelper.getGQLHeaders(requireContext(), true),
                                             requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
                                         )
@@ -159,7 +152,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                                     args.gameName,
                                     setting,
                                     requireContext().filesDir.path,
-                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                                     TwitchApiHelper.getGQLHeaders(requireContext(), true),
                                     TwitchApiHelper.getHelixHeaders(requireContext()),
                                     requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
@@ -323,7 +316,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
 
     override fun initialize() {
         viewModel.loadGame(
-            requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+            requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
             TwitchApiHelper.getGQLHeaders(requireContext()),
             TwitchApiHelper.getHelixHeaders(requireContext()),
             requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
@@ -344,7 +337,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                 args.gameSlug,
                 args.gameName,
                 setting,
-                requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                 TwitchApiHelper.getGQLHeaders(requireContext(), true),
             )
         }
@@ -353,7 +346,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                 requireContext().filesDir.path,
                 args.gameId,
                 args.gameName,
-                requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+                requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
                 TwitchApiHelper.getGQLHeaders(requireContext()),
                 TwitchApiHelper.getHelixHeaders(requireContext()),
             )
@@ -384,18 +377,18 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                 viewers.text = resources.getQuantityString(
                     R.plurals.viewers,
                     count,
-                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
                 )
             } else {
                 viewers.visibility = View.GONE
             }
-            if (game?.broadcasterCount != null && requireContext().prefs().getBoolean(C.UI_BROADCASTERSCOUNT, true)) {
+            if (game?.broadcasterCount != null && requireContext().prefs().getBoolean(C.UI_BROADCASTERS_COUNT, true)) {
                 broadcastersCount.visibility = View.VISIBLE
                 val count = game.broadcasterCount ?: 0
                 broadcastersCount.text = resources.getQuantityString(
                     R.plurals.broadcasters,
                     count,
-                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
                 )
             } else {
                 broadcastersCount.visibility = View.GONE
@@ -406,7 +399,7 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
                 followers.text = resources.getQuantityString(
                     R.plurals.followers,
                     count,
-                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATEVIEWCOUNT, true))
+                    TwitchApiHelper.formatCount(count, requireContext().prefs().getBoolean(C.UI_TRUNCATE_VIEW_COUNT, true))
                 )
             } else {
                 followers.visibility = View.GONE
@@ -478,57 +471,55 @@ class GameMediaFragment : BaseNetworkFragment(), Scrollable, FragmentHost, Integ
 
     override fun onNetworkRestored() {
         viewModel.loadGame(
-            requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
+            requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
             TwitchApiHelper.getGQLHeaders(requireContext()),
             TwitchApiHelper.getHelixHeaders(requireContext()),
             requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
         )
     }
 
-    override fun onIntegrityDialogCallback(callback: String?) {
-        if (callback != null) {
-            viewLifecycleOwner.lifecycleScope.launch {
-                repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    when (callback) {
-                        "refresh" -> {
-                            viewModel.loadGame(
-                                requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
-                                TwitchApiHelper.getGQLHeaders(requireContext()),
-                                TwitchApiHelper.getHelixHeaders(requireContext()),
-                                requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-                            )
-                            val setting = requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0
-                            if (setting < 2) {
-                                viewModel.isFollowingGame(
-                                    args.gameId,
-                                    args.gameSlug,
-                                    args.gameName,
-                                    setting,
-                                    requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
-                                    TwitchApiHelper.getGQLHeaders(requireContext(), true),
-                                )
-                            }
-                        }
-                        "follow" -> viewModel.saveFollowGame(
-                            args.gameId,
-                            args.gameSlug,
-                            args.gameName,
-                            requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
-                            requireContext().filesDir.path,
-                            requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
-                            TwitchApiHelper.getGQLHeaders(requireContext(), true),
-                            TwitchApiHelper.getHelixHeaders(requireContext()),
-                            requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-                        )
-                        "unfollow" -> viewModel.deleteFollowGame(
-                            args.gameId,
-                            requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
-                            requireContext().prefs().getString(C.NETWORK_LIBRARY, "OkHttp"),
-                            TwitchApiHelper.getGQLHeaders(requireContext(), true),
-                            requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
-                        )
-                    }
+    override fun onIntegrityTokenLoaded(callback: String?) {
+        when (callback) {
+            "refresh" -> {
+                viewModel.loadGame(
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(requireContext()),
+                    TwitchApiHelper.getHelixHeaders(requireContext()),
+                    requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                )
+                val setting = requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0
+                if (setting < 2) {
+                    viewModel.isFollowingGame(
+                        args.gameId,
+                        args.gameSlug,
+                        args.gameName,
+                        setting,
+                        requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                        TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                    )
                 }
+            }
+            "follow" -> {
+                viewModel.saveFollowGame(
+                    args.gameId,
+                    args.gameSlug,
+                    args.gameName,
+                    requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
+                    requireContext().filesDir.path,
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                    TwitchApiHelper.getHelixHeaders(requireContext()),
+                    requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                )
+            }
+            "unfollow" -> {
+                viewModel.deleteFollowGame(
+                    args.gameId,
+                    requireContext().prefs().getString(C.UI_FOLLOW_BUTTON, "0")?.toIntOrNull() ?: 0,
+                    requireContext().prefs().getString(C.NETWORK_LIBRARY, C.OKHTTP),
+                    TwitchApiHelper.getGQLHeaders(requireContext(), true),
+                    requireContext().prefs().getBoolean(C.ENABLE_INTEGRITY, false),
+                )
             }
         }
     }

@@ -28,7 +28,6 @@ class GameVideosDataSource(
     private val helixHeaders: Map<String, String>,
     private val helixRepository: HelixRepository,
     private val enableIntegrity: Boolean,
-    private val apiPref: List<String>,
     private val networkLibrary: String?,
 ) : PagingSource<Int, Video>() {
     private var api: String? = null
@@ -37,19 +36,22 @@ class GameVideosDataSource(
     override suspend fun load(params: LoadParams<Int>): LoadResult<Int, Video> {
         return if (!offset.isNullOrBlank()) {
             try {
-                loadFromApi(api, params)
+                loadFromApi(params)
             } catch (e: Exception) {
                 LoadResult.Error(e)
             }
         } else {
             try {
-                loadFromApi(apiPref.getOrNull(0), params)
+                api = C.GQL
+                loadFromApi(params)
             } catch (e: Exception) {
                 try {
-                    loadFromApi(apiPref.getOrNull(1), params)
+                    api = C.GQL_PERSISTED_QUERY
+                    loadFromApi(params)
                 } catch (e: Exception) {
                     try {
-                        loadFromApi(apiPref.getOrNull(2), params)
+                        api = C.HELIX
+                        loadFromApi(params)
                     } catch (e: Exception) {
                         LoadResult.Error(e)
                     }
@@ -58,9 +60,8 @@ class GameVideosDataSource(
         }
     }
 
-    private suspend fun loadFromApi(apiPref: String?, params: LoadParams<Int>): LoadResult<Int, Video> {
-        api = apiPref
-        return when (apiPref) {
+    private suspend fun loadFromApi(params: LoadParams<Int>): LoadResult<Int, Video> {
+        return when (api) {
             C.GQL -> if (helixPeriod == "week") gqlQueryLoad(params) else throw Exception()
             C.GQL_PERSISTED_QUERY -> if (helixPeriod == "week") gqlLoad(params) else throw Exception()
             C.HELIX -> if (!helixHeaders[C.HEADER_TOKEN].isNullOrBlank() && (gqlLanguages.isNullOrEmpty() || helixLanguage != null)) helixLoad(params) else throw Exception()
@@ -82,7 +83,7 @@ class GameVideosDataSource(
             after = offset
         )
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.game!!.videos!!
         val items = data.edges!!
@@ -121,7 +122,7 @@ class GameVideosDataSource(
     private suspend fun gqlLoad(params: LoadParams<Int>): LoadResult<Int, Video> {
         val response = graphQLRepository.loadGameVideos(networkLibrary, gqlHeaders, gameSlug, gqlType, gqlSort, gqlLanguages, params.loadSize, offset)
         if (enableIntegrity) {
-            response.errors?.find { it.message == "failed integrity check" }?.let { return LoadResult.Error(Exception(it.message)) }
+            response.errors?.find { it.message == C.FAILED_INTEGRITY_CHECK }?.let { return LoadResult.Error(Exception(it.message)) }
         }
         val data = response.data!!.game.videos
         val items = data.edges
